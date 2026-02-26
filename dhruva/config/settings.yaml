@@ -1,0 +1,58 @@
+# Dhruva — Default Configuration
+collectors:
+  earthquake:
+    enabled: true
+    interval: 60
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
+  fire:
+    enabled: true
+    interval: 120
+  conflict:
+    enabled: true
+    interval: 300
+  aircraft:
+    enabled: true
+    interval: 15
+  marine:
+    enabled: true
+    interval: 30
+  cyber:
+    enabled: true
+    interval: 60
+  outage:
+    enabled: true
+    interval: 120
+  economic:
+    enabled: true
+    interval: 300
+  military:
+    enabled: true
+    interval: 120
+    source: "NGA MSI NAVAREA + ADS-B inference"
+  ucdp:
+    enabled: true
+    interval: 600
+    source: "UCDP GED API (Uppsala University)"
+  acled:
+    enabled: false  # Requires API key — register at developer.acleddata.com
+    interval: 600
+    source: "ACLED API v3"
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins:
+    - "http://localhost:5173"
+    - "http://localhost:3000"
+
+redis:
+  enabled: false
+  url: "redis://localhost:6379"
+  stream_key: "dhruva:events"
+
+risk:
+  thresholds:
+    critical: 6.0
+    high: 4.5
+    elevated: 3.0
+    guarded: 1.5

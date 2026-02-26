@@ -1,0 +1,184 @@
+# WorldView Improvement: Military, Conflict, Protests, Hotspots
+
+## Background
+
+After reviewing [worldmonitor](https://github.com/koala73/worldmonitor) and our existing WorldView (Dhruva) codebase, here is what we identified:
+
+| Feature | worldmonitor | WorldView (current) | Gap |
+|---|---|---|---|
+| Military aircraft detection | 4-layer + Wingbits API enrichment | 4-layer + hexdb ✅ | Minor: Theater posture missing |
+| Military aircraft deduplication | Separate layer, not in [aircraft](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/military_activity_collector.py#580-583) | Both layers exist but no explicit dedup | **Aircraft still appear in both layers** |
+| Military marine vessels | MMSI ranges + AIS dark-ship detection | No military classification in marine | **Missing entirely** |
+| Conflict zones (live) | ACLED + UCDP ✅ | UCDP + ACLED collectors exist; [ConflictCollector](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/conflict_collector.py#8-53) is **still mock data** | **Real collectors bypassed!** |
+| Protest tracking | ACLED + GDELT dual-source, Haversine dedup | ACLED collector exists; **no GDELT protest feed** | **Missing GDELT protests** |
+| Intel hotspots | 4-signal blended score + convergence | Grid-cell aggregation only | **Missing news-activity + convergence signals** |
+| Geographic convergence | 3+ event types in 1°×1° cell → alert | Only in hotspot engine, no standalone alert | **Convergence not broadcast separately** |
+| Country Instability Index | CII for 22 countries, multi-signal | [risk_calculator.py](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/fusion_engine/risk_calculator.py) is simplified | **No per-country instability score** |
+| Theater posture assessment | 9 theaters, strike-packaging detection | Not implemented | **Missing** |
+
+> [!IMPORTANT]
+> **ACLED API Issue**: The user has registered but cannot generate an API key from the ACLED dashboard. This is a known ACLED portal issue — **workaround**: ACLED keys are sometimes emailed manually. Until resolved, the [ACLEDCollector](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/acled_collector.py#33-174) gracefully returns empty results; GDELT will provide protest coverage.
+>
+> **UCDP Token Issue**: User mailed for UCDP API token, no reply yet. The [UCDPCollector](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/ucdp_collector.py#32-258) handles 401 gracefully. **Workaround**: GDELT GKG is a viable free alternative for active conflict data.
+
+## Proposed Changes
+
+---
+
+### 1. GDELT Dual-Source Collector (protests + conflict)
+
+#### [NEW] [gdelt_collector.py](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/gdelt_collector.py)
+
+A new collector using the **free, no-API-key** GDELT GKG 2.0 endpoint:
+- Fetches protest events (EventCode `14*`) → `protest` layer
+- Fetches active conflict events (EventCode `19*, 20*`) → supplements `conflict` layer
+- Haversine-based deduplication within 0.1° (~11km) of ACLED events
+- Marks events as `validated` if mention count ≥ 30
+- Regime-aware severity: authoritarian states use linear scaling, democracies use log scaling
+
+**Key endpoints used (all free, no auth):**
+```
+https://api.gdeltproject.org/api/v2/events/query
+  ?format=json&QUERY=ProtestAction&TIMESPAN=48h
+  &SOURCELANG=eng&MAXROWS=250
+```
+
+---
+
+### 2. Real Conflict Data — Retire Mock ConflictCollector
+
+#### [MODIFY] [conflict_collector.py](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/conflict_collector.py)
+
+Replace the mock data generator with a GDELT-based collector for conflict events. The mock conflict data was added only as placeholder — with the GDELT collector handling real data, [ConflictCollector](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/conflict_collector.py#8-53) becomes a thin wrapper that defers to GDELT's conflict events.
+
+**Change:** Make [ConflictCollector](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/conflict_collector.py#8-53) return `[]` with a log message directing users to `gdelt_collector`. The event store will use [acled](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/acled_collector.py#112-174), [ucdp](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/ucdp_collector.py#153-258), and `gdelt_protest` types instead of the fake `conflict` type.
+
+---
+
+### 3. Military Marine Vessel Detection
+
+#### [MODIFY] [marine_collector.py](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/marine_collector.py)
+
+Add a `MilitaryMarineDetector` class (inspired by [MilitaryAircraftDetector](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/military_activity_collector.py#280-561)) using:
+- **MMSI prefix ranges** — known military-exclusive ranges (e.g., US Navy: 338*, 369*, French Navy: 227900000–227999999)
+- **Vessel type code** — AIS type 35 = Military Operations, type 55 = Law Enforcement
+- **Callsign patterns** — military vessel callsign formats  
+- **Dark ship detection** — AIS gap ≥ 20 min while in a conflict zone → flagged as potential EMCON
+
+Events tagged `is_military: true` in metadata get `type: "military_marine"` instead of `"marine"` so they render with a distinct icon.
+
+---
+
+### 4. Aircraft Layer Deduplication (Military → Separate Layer)
+
+#### [MODIFY] [main.py](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/backend/main.py)
+
+Currently, after [infer_military_aircraft()](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/military_activity_collector.py#580-583) runs, the military aircraft appear in **both** the [aircraft](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/military_activity_collector.py#580-583) store and [military_aircraft](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/collectors/military_activity_collector.py#580-583) store. Fix: after military detection, remove detected ICAO24s from `event_store["aircraft"]` before broadcasting.
+
+```python
+# After mil_aircraft is computed:
+mil_icao_set = {e["metadata"]["icao24"] for e in mil_aircraft}
+event_store["aircraft"] = [
+    e for e in normalized
+    if e.get("metadata", {}).get("icao24", "") not in mil_icao_set
+]
+```
+
+---
+
+### 5. Geographic Convergence Detection (standalone alerts)
+
+#### [MODIFY] [intel_hotspot_engine.py](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/fusion_engine/intel_hotspot_engine.py)
+
+Add `compute_convergence_alerts()` function alongside [compute_hotspots()](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/fusion_engine/intel_hotspot_engine.py#33-145):
+- Bins all events (protests, military, earthquakes, fires, conflict) into 1°×1° cells
+- When **3+ distinct event types** converge in 1 cell within 24h → emit `convergence_alert` event
+- Score = `n_types × 25 + min(n_events × 2, 50)` (max 100)
+- Reverse-geocode to human label (country + region from event metadata)
+- Added to event_store as `"convergence"` layer
+
+#### [MODIFY] [main.py](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/backend/main.py)
+
+Wire `compute_convergence_alerts()` into the pipeline — compute alongside hotspots and broadcast on the `convergence` layer.
+
+---
+
+### 6. Country Instability Index (CII)
+
+#### [NEW] [country_instability.py](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/fusion_engine/country_instability.py)
+
+Compute a 0–100 instability score for **22 monitored countries** using weighted signals:
+
+| Signal | Weight |
+|---|---|
+| Active conflict events nearby (ACLED/UCDP) | 30% |
+| Military aircraft/vessel activity | 20% |
+| Fire / disaster events | 15% |
+| Protest events | 20% |
+| Cyber events | 15% |
+
+Country-floor pins: Ukraine ≥ 55, Syria ≥ 50, Yemen ≥ 45.
+
+Results surfaced via `/api/cii` endpoint and integrated into hotspot scoring.
+
+---
+
+### 7. Backend Registration: New Layers
+
+#### [MODIFY] [main.py](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/backend/main.py)
+
+- Add `GDELTCollector` to collectors list
+- Add `protest`, `gdelt_conflict`, `military_marine`, `convergence`, `cii` to `event_store`
+- Wire `compute_convergence_alerts()` into conditions
+- Add `/api/cii` endpoint
+
+#### [MODIFY] [config.py](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/backend/config.py)
+
+Add `gdelt_interval = 300` setting.
+
+---
+
+## API Access Notes
+
+> [!WARNING]
+> **ACLED**: You mentioned you can't generate an API key despite registering. Please email [data@acleddata.com](mailto:data@acleddata.com) directly — key delivery sometimes requires manual processing. Your key will auto-activate once added to [credentials.json](file:///c:/Users/Kuntal/Desktop/Projects/WorldView/dhruva/credentials.json).
+>
+> **UCDP**: The UCDP API now requires auth tokens obtained by contacting [ucdp@pcr.uu.se](mailto:ucdp@pcr.uu.se) directly. We handle this gracefully already — GDELT will cover conflict events in the interim.
+
+---
+
+## Verification Plan
+
+### Automated / Backend Tests
+```powershell
+# From dhruva directory (after starting backend):
+cd c:\Users\Kuntal\Desktop\Projects\WorldView\dhruva
+
+# 1. Start backend
+python -m uvicorn backend.main:app --reload --port 8000
+
+# 2. In a separate terminal — check all layers are registered
+Invoke-RestMethod http://localhost:8000/api/layers | ConvertTo-Json
+
+# Expected: protest, gdelt_conflict, military_marine, convergence, cii layers present
+
+# 3. Check GDELT events populated
+Invoke-RestMethod http://localhost:8000/api/events/protest
+
+# 4. Check aircraft dedup working (military should NOT appear in aircraft)
+$aircraft = (Invoke-RestMethod http://localhost:8000/api/events/aircraft).events
+$milAir   = (Invoke-RestMethod http://localhost:8000/api/events/military_aircraft).events
+$overlap  = $aircraft.id | Where-Object { $milAir.id -contains $_ }
+Write-Host "Overlap count (should be 0): $($overlap.Count)"
+
+# 5. Check CII endpoint
+Invoke-RestMethod http://localhost:8000/api/cii
+```
+
+### Manual Verification (frontend)
+1. Open `http://localhost:5173` (frontend dev server)
+2. Verify **Protests layer** shows real global protest events on globe
+3. Verify **Military Marine** icons are distinct from regular marine icons
+4. Verify military aircraft do NOT appear as duplicate dots on the regular aircraft layer
+5. Verify **Intel Hotspot** tooltips cite real source types including `gdelt_protest`
+6. Check **Convergence Alerts** panel (if added to UI) shows multi-source convergence zones
