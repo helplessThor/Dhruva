@@ -21,7 +21,7 @@ collectors:
     interval: 60
   outage:
     enabled: true
-    interval: 120
+    interval: 1800
   economic:
     enabled: true
     interval: 300
