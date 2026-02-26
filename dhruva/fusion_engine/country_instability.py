@@ -147,10 +147,8 @@ def compute_cii(event_store: dict[str, list[dict]]) -> list[dict]:
         )
         raw_score = round(raw_score, 1)
 
-        # Apply country floor
-        floor = COUNTRY_FLOORS.get(country, 0)
-        score = max(raw_score, float(floor))
-        score = min(score, 100.0)
+        # Strictly based on real data now (no floors)
+        score = min(raw_score, 100.0)
 
         # Determine label
         if score >= 75:

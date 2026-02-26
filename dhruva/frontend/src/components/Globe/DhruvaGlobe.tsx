@@ -29,73 +29,76 @@ interface DhruvaGlobeProps {
    ═══════════════════════════════════════════════════════════════════ */
 
 /** Each event type: unique halo color + clean SVG symbol path */
-const MARKER_DEFS: Record<EventType, { color: string; symbol: string; filled: boolean }> = {
+const MARKER_DEFS: Record<EventType, { color: string; symbol: string; scale: number }> = {
     earthquake: {
         color: '#ff6600',
-        symbol: '<circle cx="16" cy="16" r="4" fill="#fff"/><circle cx="16" cy="16" r="8" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.8"/><circle cx="16" cy="16" r="12" fill="none" stroke="#fff" stroke-width="1.2" opacity="0.5"/>',
-        filled: false,
+        symbol: '<path d="M2 8h3l2-4 2 8 2-4h3" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="8" cy="8" r="7" fill="none" stroke="#fff" stroke-width="1" opacity="0.4" />',
+        scale: 1,
     },
     fire: {
         color: '#ff2d20',
-        symbol: '<path d="M16 5C16 5 10 12 10 18c0 3.3 2.7 6 6 6s6-2.7 6-6C22 12 16 5 16 5z" fill="#fff"/>',
-        filled: true,
+        symbol: '<path d="M8.5 2c0 0-3.5 1.5-3.5 4.5 0 2 1 3.5 1 3.5s.5-1.5 1-2.5c0 0 4.5 1 4.5 5 0 2-1.5 3.5-3.5 3.5-2.5 0-4.5-2-4.5-4.5 0-2 1-3.5 1.5-4-.5.5-1 1.5-1 3 0 0-2 1.5-2 3.5C2 13.5 4.5 16 8 16s6-2.5 6-6c0-4-3-6-5.5-8z" fill="#fff" opacity="0.9" />',
+        scale: 1.1,
     },
     conflict: {
         color: '#ff0055',
-        symbol: '<circle cx="16" cy="16" r="6" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="16" cy="16" r="2" fill="#fff"/><line x1="16" y1="4" x2="16" y2="10" stroke="#fff" stroke-width="1.8"/><line x1="16" y1="22" x2="16" y2="28" stroke="#fff" stroke-width="1.8"/><line x1="4" y1="16" x2="10" y2="16" stroke="#fff" stroke-width="1.8"/><line x1="22" y1="16" x2="28" y2="16" stroke="#fff" stroke-width="1.8"/>',
-        filled: false,
+        symbol: '<path d="M4 12l8-8M12 12L4 4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" /><circle cx="8" cy="8" r="7" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.5" />',
+        scale: 1,
     },
     aircraft: {
         color: '#00bfff',
-        symbol: '<path d="M16 4 L18 13 L27 16 L18 18 L19 26 L16 24 L13 26 L14 18 L5 16 L14 13 Z" fill="#fff"/>',
-        filled: true,
+        symbol: '<path d="M13.5 8c0-.8-.7-1.5-1.5-1.5H9L6 2H4.5l1.5 4.5H3L2 5H1l1 3-1 3h1l1-1.5h3L4.5 14H6l3-4.5h3c.8 0 1.5-.7 1.5-1.5z" fill="#fff" />',
+        scale: 1.2,
     },
     marine: {
         color: '#00aaff',
-        symbol: '<circle cx="16" cy="9" r="3" fill="none" stroke="#fff" stroke-width="1.8"/><line x1="16" y1="12" x2="16" y2="25" stroke="#fff" stroke-width="1.8"/><path d="M10 22 C10 26 16 28 16 28 C16 28 22 26 22 22" fill="none" stroke="#fff" stroke-width="1.8"/><line x1="12" y1="16" x2="20" y2="16" stroke="#fff" stroke-width="1.8"/>',
-        filled: false,
+        symbol: '<path d="M2 10l1-5h8l2 5z" fill="#fff" opacity="0.8" /><path d="M4 5V3h4v2" fill="none" stroke="#fff" stroke-width="1.5" /><path d="M1 12c2 1 4-1 6 0s4 1 6 0 2-1 2-1" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />',
+        scale: 1.1,
     },
     cyber: {
         color: '#9333ea',
-        symbol: '<path d="M16 4 L26 9 L26 17 C26 23 21 27 16 29 C11 27 6 23 6 17 L6 9 Z" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="13" y="15" width="6" height="5" rx="1" fill="#fff"/><path d="M14 15 V13 C14 11 18 11 18 13 V15" fill="none" stroke="#fff" stroke-width="1.5"/>',
-        filled: false,
+        symbol: '<path d="M8 1.5l5 2v4c0 4-5 6.5-5 6.5S3 11.5 3 7.5v-4z" fill="none" stroke="#fff" stroke-width="1.5" /><path d="M6 7l1.5 2L10.5 5.5" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />',
+        scale: 1,
     },
     outage: {
         color: '#f59e0b',
-        symbol: '<path d="M18 4 L10 17 L15 17 L14 28 L22 15 L17 15 Z" fill="#fff"/>',
-        filled: true,
+        symbol: '<path d="M8 2v4M8 10v4M6 6h4v4H6z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M3 8l3-3m4 0l3 3" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity="0.6" />',
+        scale: 1,
     },
     economic: {
         color: '#10b981',
-        symbol: '<polyline points="6,24 12,16 18,20 26,8" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22,8 26,8 26,12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
-        filled: false,
+        symbol: '<path d="M2 13h12" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" /><path d="M3 10l3-3 2 2 4-4" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M9 5h3v3" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />',
+        scale: 1.1,
     },
     military: {
         color: '#4ade80',
-        symbol: '<path d="M16 3 L24 8 L24 18 C24 23 20 27 16 29 C12 27 8 23 8 18 L8 8 Z" fill="none" stroke="#fff" stroke-width="1.6"/><line x1="16" y1="11" x2="16" y2="21" stroke="#fff" stroke-width="1.5"/><line x1="11" y1="16" x2="21" y2="16" stroke="#fff" stroke-width="1.5"/>',
-        filled: false,
+        symbol: '<circle cx="8" cy="8" r="6" fill="none" stroke="#fff" stroke-width="1.5" /><circle cx="8" cy="8" r="2" fill="#fff" /><path d="M8 1v2M8 13v2M1 8h2M13 8h2" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />',
+        scale: 1.1,
     },
     military_aircraft: {
         color: '#a3e635',
-        // Delta-wing fighter jet: swept wings, pointed fuselage, tail fins
-        symbol: '<line x1="16" y1="4" x2="16" y2="26" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><path d="M16 8 L3 23 L10 20 L16 26 L22 20 L29 23 Z" fill="#fff" opacity="0.9"/><path d="M16 11 L11 15 L14 14 L16 16 L18 14 L21 15 Z" fill="#fff"/><line x1="13" y1="22" x2="10" y2="28" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><line x1="19" y1="22" x2="22" y2="28" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>',
-        filled: true,
+        symbol: '<path d="M8 1l1.5 4h-3zM8 4l4 6v2h-2L8 10l-2 2H4v-2z" fill="#fff" stroke="#fff" stroke-width="1" stroke-linejoin="round" />',
+        scale: 1.2,
     },
-
     ucdp: {
         color: '#e11d48',
-        symbol: '<polygon points="16,4 19,12 28,12 21,18 23,26 16,22 9,26 11,18 4,12 13,12" fill="#fff" fill-opacity="0.9"/>',
-        filled: true,
+        symbol: '<path d="M8 2l6.5 11H1.5z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><path d="M8 6v3M8 11.5v.5" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />',
+        scale: 1,
     },
     acled: {
         color: '#f97316',
-        symbol: '<circle cx="16" cy="16" r="7" fill="none" stroke="#fff" stroke-width="1.6"/><circle cx="16" cy="16" r="3" fill="none" stroke="#fff" stroke-width="1.2"/><circle cx="16" cy="16" r="1.5" fill="#fff"/><line x1="16" y1="5" x2="16" y2="9" stroke="#fff" stroke-width="1.3"/><line x1="16" y1="23" x2="16" y2="27" stroke="#fff" stroke-width="1.3"/>',
-        filled: false,
+        symbol: '<path d="M8 1C5.5 1 3.5 3 3.5 5.5c0 3 4.5 9.5 4.5 9.5s4.5-6.5 4.5-9.5C12.5 3 10.5 1 8 1z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="5.5" r="2" fill="#fff" />',
+        scale: 1.1,
+    },
+    naval: {
+        color: '#3b82f6',
+        symbol: '<path d="M2 10l1-5h8l2 5z" fill="#fff" opacity="0.8" /><path d="M4 5V3h4v2" fill="none" stroke="#fff" stroke-width="1.5" /><path d="M1 12c2 1 4-1 6 0s4 1 6 0 2-1 2-1" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />',
+        scale: 1.1,
     },
     intel_hotspot: {
         color: '#fbbf24',
-        symbol: '<path d="M16 6 L19 13 L26 13 L20 18 L22 25 L16 21 L10 25 L12 18 L6 13 L13 13 Z" fill="#fff" fill-opacity="0.85"/><circle cx="16" cy="16" r="13" fill="none" stroke="#fff" stroke-width="1" opacity="0.4"/><circle cx="16" cy="16" r="10" fill="none" stroke="#fff" stroke-width="0.8" opacity="0.6"/>',
-        filled: false,
+        symbol: '<path d="M2 8c0 0 3-4 6-4s6 4 6 4-3 4-6 4-6-4-6-4z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="8" r="2.5" fill="#fff" /><path d="M8 2v1M8 13v1M2 8H1M15 8h-1" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.4" stroke-linecap="round" />',
+        scale: 1,
     },
 };
 
@@ -108,24 +111,70 @@ const SEVERITY_GLOW: Record<number, number> = {
     5: 0.90,
 };
 
-/** Builds a professional marker SVG: colored halo + white symbol */
+/** Builds a premium professional marker SVG: 3D Jewel + glassmorphic surface + sharp vector symbol */
 function buildMarkerSvg(type: EventType, severity: number): string {
     const def = MARKER_DEFS[type];
-    const size = 40 + severity * 4; // 44–60px
-    const glow = SEVERITY_GLOW[severity] || 0.4;
+    // Base size config for crisp SVG rendering at scale
+    // Cesium Billboard scaleByDistance handles zooming/scaling down
+    const size = 64;
+    const baseGlow = SEVERITY_GLOW[severity] || 0.4;
+    // Boost glow slightly for the new premium aesthetic
+    const glow = Math.min(0.95, baseGlow * 1.3);
     const sevColor = SEVERITY_COLORS[severity] || def.color;
-    const gradId = `h-${type}-${severity}`;
+
+    // Unique IDs for SVG defs to prevent cross-bleeding
+    const haloId = `halo-${type}-${severity}`;
+    const glassId = `glass-${type}-${severity}`;
+    const ringId = `ring-${type}-${severity}`;
+    const shadowId = `shadow-${type}-${severity}`;
+
+    // Scale the 16x16 icon path up to fit nicely inside the glowing halo
+    const symbolScale = Math.max(1.8, def.scale * 2.2);
+    const symbolOffset = 32 - (8 * symbolScale);
 
     const svg = [
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 32 32">`,
-        `<defs><radialGradient id="${gradId}">`,
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
+        `<defs>`,
+        // 1. Glowing Halo behind the marker
+        `<radialGradient id="${haloId}">`,
         `<stop offset="0%" stop-color="${def.color}" stop-opacity="${glow}"/>`,
-        `<stop offset="60%" stop-color="${def.color}" stop-opacity="${(glow * 0.4).toFixed(2)}"/>`,
+        `<stop offset="40%" stop-color="${def.color}" stop-opacity="${(glow * 0.5).toFixed(2)}"/>`,
         `<stop offset="100%" stop-color="${def.color}" stop-opacity="0"/>`,
-        `</radialGradient></defs>`,
-        `<circle cx="16" cy="16" r="15" fill="url(#${gradId})"/>`,
-        `<circle cx="16" cy="16" r="11" fill="${def.color}" fill-opacity="0.25" stroke="${sevColor}" stroke-width="1" stroke-opacity="0.6"/>`,
+        `</radialGradient>`,
+
+        // 2. Glassmorphic / 3D Jewel Body Gradient (Diagonal lighting)
+        `<linearGradient id="${glassId}" x1="0%" y1="0%" x2="100%" y2="100%">`,
+        `<stop offset="0%" stop-color="${def.color}" stop-opacity="0.9"/>`,
+        `<stop offset="50%" stop-color="${def.color}" stop-opacity="0.6"/>`,
+        `<stop offset="100%" stop-color="#000000" stop-opacity="0.6"/>`,
+        `</linearGradient>`,
+
+        // 3. Crisp Metallic/Neon Edge Ring (Simulates light catching the rim)
+        `<linearGradient id="${ringId}" x1="0%" y1="0%" x2="0%" y2="100%">`,
+        `<stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>`,
+        `<stop offset="100%" stop-color="${sevColor}" stop-opacity="0.4"/>`,
+        `</linearGradient>`,
+
+        // 4. Drop Shadow for the inner vector symbol to make it pop aggressively
+        `<filter id="${shadowId}" x="-20%" y="-20%" width="140%" height="140%">`,
+        `<feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000" flood-opacity="0.9"/>`,
+        `</filter>`,
+        `</defs>`,
+
+        // Render large blurred halo
+        `<circle cx="32" cy="32" r="30" fill="url(#${haloId})"/>`,
+
+        // Render 3D Jewel Surface with Metallic Stroke
+        `<circle cx="32" cy="32" r="18" fill="url(#${glassId})" stroke="url(#${ringId})" stroke-width="1.5"/>`,
+
+        // Add Top Gloss Rays (Apple-style 3D specular shine)
+        `<ellipse cx="32" cy="20" rx="12" ry="5" fill="#ffffff" fill-opacity="0.25"/>`,
+        `<ellipse cx="32" cy="17" rx="6" ry="2" fill="#ffffff" fill-opacity="0.4"/>`,
+
+        // Render Symbol with inner drop shadow
+        `<g transform="translate(${symbolOffset}, ${symbolOffset}) scale(${symbolScale})" filter="url(#${shadowId})">`,
         def.symbol,
+        `</g>`,
         `</svg>`,
     ].join('');
 
@@ -230,10 +279,17 @@ const GlobeLegend: React.FC<{ enabledLayers: Set<EventType> }> = ({ enabledLayer
 
 const DhruvaGlobe: React.FC<DhruvaGlobeProps> = ({ events, enabledLayers, onEventSelect }) => {
     const flatEvents = useMemo(() => {
+        const seenIds = new Set<string>();
         const result: OsintEvent[] = [];
+
         for (const [type, layerEvents] of Object.entries(events)) {
             if (enabledLayers.has(type as EventType)) {
-                result.push(...layerEvents);
+                for (const event of layerEvents) {
+                    if (!seenIds.has(event.id)) {
+                        seenIds.add(event.id);
+                        result.push(event);
+                    }
+                }
             }
         }
         return result;
@@ -278,7 +334,13 @@ const DhruvaGlobe: React.FC<DhruvaGlobeProps> = ({ events, enabledLayers, onEven
                             <BillboardGraphics
                                 image={getMarkerImage(event.type, event.severity)}
                                 verticalOrigin={VerticalOrigin.CENTER}
-                                scaleByDistance={new NearFarScalar(1.5e2, 2.0, 1.5e7, 0.5)}
+                                // A base scale multiplier for Billboard size. Base SVG size is 64x64.
+                                // Aircraft needs to be slightly smaller to prevent huge overlapping clusters.
+                                scale={(event.type === 'aircraft' || event.type === 'military_aircraft') ? 0.45 : 0.60}
+                                // scaleByDistance: [Distance Near, Scale Near, Distance Far, Scale Far]
+                                // So at 500km altitude (zoomed in) scale is 1.5 (150% of base scale). 
+                                // At 15000km altitude (zoomed far out) scale drops linearly to 0.6 (60% of base scale).
+                                scaleByDistance={new NearFarScalar(5.0e5, 1.5, 1.5e7, 0.6)}
                                 rotation={rotation}
                                 alignedAxis={Cartesian3.ZERO}
                             />

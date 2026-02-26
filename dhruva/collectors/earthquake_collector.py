@@ -11,7 +11,6 @@ class EarthquakeCollector(BaseCollector):
 
     def __init__(self, interval: int = 60):
         super().__init__(name="earthquake", interval=interval)
-        self._seen_ids: set = set()
 
     def _magnitude_to_severity(self, mag: float) -> int:
         if mag >= 7.0:
@@ -30,10 +29,6 @@ class EarthquakeCollector(BaseCollector):
 
         for feature in data.get("features", []):
             fid = feature["id"]
-            if fid in self._seen_ids:
-                continue
-            self._seen_ids.add(fid)
-
             props = feature["properties"]
             coords = feature["geometry"]["coordinates"]  # [lon, lat, depth]
             mag = props.get("mag", 0) or 0
@@ -58,9 +53,5 @@ class EarthquakeCollector(BaseCollector):
                     "url": props.get("url", ""),
                 },
             })
-
-        # Keep seen IDs bounded
-        if len(self._seen_ids) > 5000:
-            self._seen_ids = set(list(self._seen_ids)[-2000:])
 
         return events

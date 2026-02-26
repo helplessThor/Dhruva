@@ -18,7 +18,7 @@ function App() {
   const { events, risk, connected } = useWebSocket();
   const [selectedEvent, setSelectedEvent] = useState<OsintEvent | null>(null);
   const [enabledLayers, setEnabledLayers] = useState<Set<EventType>>(
-    new Set(LAYER_CONFIGS.map(l => l.id))
+    new Set(LAYER_CONFIGS.filter(l => l.enabled).map(l => l.id))
   );
   const [activeOverlay, setActiveOverlay] = useState<OverlayView>(null);
 
@@ -60,24 +60,6 @@ function App() {
           <span className="header-subtitle">OSINT SITUATIONAL AWARENESS</span>
         </div>
         <div className="header-actions">
-          <button
-            className={`view-btn ${activeOverlay === 'air' ? 'active' : ''}`}
-            onClick={() => setActiveOverlay(activeOverlay === 'air' ? null : 'air')}
-          >
-            ✈️ Air Traffic
-          </button>
-          <button
-            className={`view-btn ${activeOverlay === 'marine' ? 'active' : ''}`}
-            onClick={() => setActiveOverlay(activeOverlay === 'marine' ? null : 'marine')}
-          >
-            🚢 Marine
-          </button>
-          <button
-            className={`view-btn ${activeOverlay === 'cyber' ? 'active' : ''}`}
-            onClick={() => setActiveOverlay(activeOverlay === 'cyber' ? null : 'cyber')}
-          >
-            💻 Cyber
-          </button>
         </div>
       </header>
 

@@ -140,9 +140,15 @@ class FireCollector(BaseCollector):
 
                 severity = self._brightness_to_severity(brightness)
                 conf_label = self._confidence_label(conf)
+                
+                # Keep nominal and high confidence, ignore low confidence
+                if conf_label == "Low" or conf_label == "Nominal":
+                    continue
 
-                # Build a stable-ish ID from satellite + date-time + rounded coords
-                row_id = f"fire-{satellite}-{acq_date}-{acq_time}-{lat:.2f}-{lon:.2f}"
+                import uuid
+                short_uid = str(uuid.uuid4())[:8]
+                # Build a stable-ish ID from satellite + date-time + rounded coords + a unique hash
+                row_id = f"fire-{satellite}-{acq_date}-{acq_time}-{lat:.2f}-{lon:.2f}-{short_uid}"
 
                 events.append({
                     "id": row_id,

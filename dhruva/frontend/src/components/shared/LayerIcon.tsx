@@ -7,131 +7,103 @@ import type { EventType } from '../../types/events';
  */
 
 const ICON_PATHS: Record<EventType, (c: string) => React.ReactNode> = {
+    // Earthquake: seismic waves radiating from a fault line epicenter
     earthquake: (c) => (
         <>
-            <circle cx="8" cy="8" r="2.5" fill={c} />
-            <circle cx="8" cy="8" r="5" fill="none" stroke={c} strokeWidth="1.2" opacity="0.7" />
-            <circle cx="8" cy="8" r="7" fill="none" stroke={c} strokeWidth="0.8" opacity="0.4" />
+            <path d="M2 8h3l2-4 2 8 2-4h3" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="8" cy="8" r="7" fill="none" stroke={c} strokeWidth="1" opacity="0.4" />
         </>
     ),
+    // Fire: clean modern flame silhouette
     fire: (c) => (
         <path
-            d="M8 2C8 2 4.5 6.5 4.5 9.5C4.5 11.4 5.6 13 8 13S11.5 11.4 11.5 9.5C11.5 6.5 8 2 8 2Z"
+            d="M8.5 2c0 0-3.5 1.5-3.5 4.5 0 2 1 3.5 1 3.5s.5-1.5 1-2.5c0 0 4.5 1 4.5 5 0 2-1.5 3.5-3.5 3.5-2.5 0-4.5-2-4.5-4.5 0-2 1-3.5 1.5-4-.5.5-1 1.5-1 3 0 0-2 1.5-2 3.5C2 13.5 4.5 16 8 16s6-2.5 6-6c0-4-3-6-5.5-8z"
             fill={c}
             opacity="0.9"
         />
     ),
+    // Conflict: crossed swords / battle marker
     conflict: (c) => (
         <>
-            <circle cx="8" cy="8" r="3.5" fill="none" stroke={c} strokeWidth="1.3" />
-            <circle cx="8" cy="8" r="1.2" fill={c} />
-            <line x1="8" y1="1.5" x2="8" y2="4.5" stroke={c} strokeWidth="1.3" />
-            <line x1="8" y1="11.5" x2="8" y2="14.5" stroke={c} strokeWidth="1.3" />
-            <line x1="1.5" y1="8" x2="4.5" y2="8" stroke={c} strokeWidth="1.3" />
-            <line x1="11.5" y1="8" x2="14.5" y2="8" stroke={c} strokeWidth="1.3" />
+            <path d="M4 12l8-8M12 12L4 4" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" />
+            <circle cx="8" cy="8" r="7" fill="none" stroke={c} strokeWidth="1.5" opacity="0.5" />
         </>
     ),
+    // Aircraft: commercial plane silhouette from above
     aircraft: (c) => (
         <path
-            d="M8 2 L9.2 6.5 L14 8 L9.2 9.2 L9.8 13 L8 12 L6.2 13 L6.8 9.2 L2 8 L6.8 6.5 Z"
+            d="M13.5 8c0-.8-.7-1.5-1.5-1.5H9L6 2H4.5l1.5 4.5H3L2 5H1l1 3-1 3h1l1-1.5h3L4.5 14H6l3-4.5h3c.8 0 1.5-.7 1.5-1.5z"
             fill={c}
         />
     ),
+    // Marine: cargo ship / vessel side profile riding a wave
     marine: (c) => (
         <>
-            <path d="M4 11 Q6 13 8 11 Q10 13 12 11" fill="none" stroke={c} strokeWidth="1.3" strokeLinecap="round" />
-            <path d="M4 13 Q6 15 8 13 Q10 15 12 13" fill="none" stroke={c} strokeWidth="1.3" strokeLinecap="round" opacity="0.5" />
-            <polygon points="8,2 9.5,8 8,7.5 6.5,8" fill={c} opacity="0.9" />
-            <line x1="8" y1="2" x2="8" y2="11" stroke={c} strokeWidth="1.2" />
+            <path d="M2 10l1-5h8l2 5z" fill={c} opacity="0.8" />
+            <path d="M4 5V3h4v2" fill="none" stroke={c} strokeWidth="1.5" />
+            <path d="M1 12c2 1 4-1 6 0s4 1 6 0 2-1 2-1" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" />
         </>
     ),
+    // Cyber Attack: shield with a digital strike / bug
     cyber: (c) => (
         <>
-            <path
-                d="M8 1.5 L13 4 L13 8.5 C13 11.5 10.5 13.5 8 14.5 C5.5 13.5 3 11.5 3 8.5 L3 4 Z"
-                fill="none"
-                stroke={c}
-                strokeWidth="1.2"
-            />
-            <rect x="6.5" y="7.5" width="3" height="2.5" rx="0.5" fill={c} />
-            <path d="M7 7.5 V6.5 C7 5.5 9 5.5 9 6.5 V7.5" fill="none" stroke={c} strokeWidth="1" />
+            <path d="M8 1.5l5 2v4c0 4-5 6.5-5 6.5S3 11.5 3 7.5v-4z" fill="none" stroke={c} strokeWidth="1.5" />
+            <path d="M6 7l1.5 2L10.5 5.5" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </>
     ),
+    // Outage: severed plug / broken connection
     outage: (c) => (
-        <path
-            d="M9.5 2 L5 8.5 L7.5 8.5 L6.5 14 L11 7.5 L8.5 7.5 Z"
-            fill={c}
-        />
+        <>
+            <path d="M8 2v4M8 10v4M6 6h4v4H6z" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M3 8l3-3m4 0l3 3" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" opacity="0.6" />
+        </>
     ),
+    // Economic: bold trending chart arrow
     economic: (c) => (
         <>
-            <polyline
-                points="2,12 5.5,7.5 9,9.5 14,3.5"
-                fill="none"
-                stroke={c}
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
-            <polyline
-                points="11.5,3.5 14,3.5 14,6"
-                fill="none"
-                stroke={c}
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
+            <path d="M2 13h12" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M3 10l3-3 2 2 4-4" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M9 5h3v3" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </>
     ),
+    // Military: bold target reticle / crosshairs
     military: (c) => (
         <>
-            <path
-                d="M8 1.5 L13 4 L13 9 C13 12 10.5 14 8 15 C5.5 14 3 12 3 9 L3 4 Z"
-                fill="none"
-                stroke={c}
-                strokeWidth="1.2"
-            />
-            <line x1="8" y1="5.5" x2="8" y2="11" stroke={c} strokeWidth="1.2" />
-            <line x1="5.5" y1="8" x2="10.5" y2="8" stroke={c} strokeWidth="1.2" />
+            <circle cx="8" cy="8" r="6" fill="none" stroke={c} strokeWidth="1.5" />
+            <circle cx="8" cy="8" r="2" fill={c} />
+            <path d="M8 1v2M8 13v2M1 8h2M13 8h2" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" />
         </>
     ),
+    // Military Aircraft: stealth fighter / jet from above
     military_aircraft: (c) => (
-        <>
-            {/* Fuselage — pointed nose to tail */}
-            <line x1="8" y1="1.5" x2="8" y2="13" stroke={c} strokeWidth="1.5" strokeLinecap="round" />
-            {/* Swept delta wings */}
-            <path d="M8 4 L1.5 11.5 L5 10 L8 13 L11 10 L14.5 11.5 Z" fill={c} opacity="0.9" />
-            {/* Canards (small forward wings) */}
-            <path d="M8 5.5 L5.5 7.5 L7 7 L8 8 L9 7 L10.5 7.5 Z" fill={c} />
-            {/* Tail fins */}
-            <line x1="6.5" y1="11.5" x2="5" y2="14" stroke={c} strokeWidth="1" strokeLinecap="round" />
-            <line x1="9.5" y1="11.5" x2="11" y2="14" stroke={c} strokeWidth="1" strokeLinecap="round" />
-        </>
-    ),
-    ucdp: (c) => (
-        <polygon
-            points="8,1.5 9.5,5.5 14,5.5 10.5,8.5 11.5,13 8,10.5 4.5,13 5.5,8.5 2,5.5 6.5,5.5"
+        <path
+            d="M8 1l1.5 4h-3zM8 4l4 6v2h-2L8 10l-2 2H4v-2z"
             fill={c}
-            opacity="0.9"
+            stroke={c}
+            strokeWidth="1"
+            strokeLinejoin="round"
         />
     ),
-    acled: (c) => (
+    // UCDP / General Conflict: warning alert triangle
+    ucdp: (c) => (
         <>
-            <circle cx="8" cy="8" r="4" fill="none" stroke={c} strokeWidth="1.3" />
-            <circle cx="8" cy="8" r="1.8" fill="none" stroke={c} strokeWidth="1" />
-            <circle cx="8" cy="8" r="0.8" fill={c} />
-            <line x1="8" y1="2" x2="8" y2="4" stroke={c} strokeWidth="1.2" />
-            <line x1="8" y1="12" x2="8" y2="14" stroke={c} strokeWidth="1.2" />
+            <path d="M8 2l6.5 11H1.5z" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round" />
+            <path d="M8 6v3M8 11.5v.5" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" />
         </>
     ),
+    // ACLED: map marker / POI pin
+    acled: (c) => (
+        <>
+            <path d="M8 1C5.5 1 3.5 3 3.5 5.5c0 3 4.5 9.5 4.5 9.5s4.5-6.5 4.5-9.5C12.5 3 10.5 1 8 1z" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round" />
+            <circle cx="8" cy="5.5" r="2" fill={c} />
+        </>
+    ),
+    // Intel Hotspot: glowing radar blip or scanning eye
     intel_hotspot: (c) => (
         <>
-            <path
-                d="M8 2 L9.5 6 L14 6 L10.5 9 L11.5 13 L8 10.5 L4.5 13 L5.5 9 L2 6 L6.5 6 Z"
-                fill={c}
-                opacity="0.85"
-            />
-            <circle cx="8" cy="8" r="7" fill="none" stroke={c} strokeWidth="0.7" opacity="0.4" />
+            <path d="M2 8c0 0 3-4 6-4s6 4 6 4-3 4-6 4-6-4-6-4z" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round" />
+            <circle cx="8" cy="8" r="2.5" fill={c} />
+            <path d="M8 2v1M8 13v1M2 8H1M15 8h-1" fill="none" stroke={c} strokeWidth="1.5" opacity="0.4" strokeLinecap="round" />
         </>
     ),
 };

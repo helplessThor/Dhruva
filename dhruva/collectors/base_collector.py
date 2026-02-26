@@ -61,3 +61,36 @@ class BaseCollector(ABC):
         resp = await self._http_client.get(url, params=params)
         resp.raise_for_status()
         return resp.json()
+
+    async def ask_groq(self, prompt: str, system: str = "You are a military intelligence OSINT analyst.") -> str:
+        """Execute high-speed zero-shot inference via Groq Llama3 to verify OSINT."""
+        from backend.config import settings
+        if not settings.groq_api_key:
+            return ""
+            
+        if not self._http_client:
+            self._http_client = httpx.AsyncClient(timeout=30.0)
+            
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {settings.groq_api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "llama3-8b-8192",
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.0,
+            "max_tokens": 150
+        }
+        
+        try:
+            resp = await self._http_client.post(url, headers=headers, json=payload, timeout=10.0)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            logger.error("[%s] Groq API inference failed: %s", self.name, e)
+            return ""

@@ -29,22 +29,26 @@ class Settings(BaseSettings):
 
     # Collector intervals (seconds)
     earthquake_interval: int = 60
-    fire_interval: int = 120
-    conflict_interval: int = 300
+    fire_interval: int = 600
+    conflict_interval: int = 3600
     aircraft_interval: int = 15
     marine_interval: int = 30
     cyber_interval: int = 60
     outage_interval: int = 1800
     economic_interval: int = 300
     military_interval: int = 120
-    ucdp_interval: int = 600
-    acled_interval: int = 600
+    ucdp_interval: int = 20
+    acled_interval: int = 3600
+    gdelt_interval: int = 300
+    naval_interval: int = 3600
     gdelt_interval: int = 300
 
     # API Keys (optional — collectors use public APIs or mock data)
-    acled_api_key: Optional[str] = None
     acled_email: Optional[str] = None
+    acled_password: Optional[str] = None
     adsb_api_key: Optional[str] = None
+    ucdp_api_token: Optional[str] = None
+    groq_api_key: Optional[str] = None
 
     # OpenSky Network OAuth2 credentials
     opensky_client_id: str = ""
@@ -71,11 +75,23 @@ def _load_settings() -> Settings:
                     _cfg_logger.info("OpenSky credentials loaded from %s", creds_path.name)
 
             # ACLED API
-            if not s.acled_api_key:
-                s.acled_api_key = creds.get("acled_api_key", "")
+            if not s.acled_email or not s.acled_password:
                 s.acled_email = creds.get("acled_email", "")
-                if s.acled_api_key:
+                s.acled_password = creds.get("acled_password", "")
+                if s.acled_email and s.acled_password:
                     _cfg_logger.info("ACLED credentials loaded from %s", creds_path.name)
+            
+            # UCDP API
+            if not s.ucdp_api_token:
+                s.ucdp_api_token = creds.get("ucdp_api_token", "")
+                if s.ucdp_api_token:
+                    _cfg_logger.info("UCDP credentials loaded from %s", creds_path.name)
+                    
+            # Groq API
+            if not s.groq_api_key:
+                s.groq_api_key = creds.get("groq_api_key", "")
+                if s.groq_api_key:
+                    _cfg_logger.info("Groq API credentials loaded from %s", creds_path.name)
         except Exception as e:
             _cfg_logger.warning("Failed to read credentials.json: %s", e)
 

@@ -18,23 +18,23 @@ logger = logging.getLogger("dhruva.collector")
 ACLED_API_URL = "https://api.acleddata.com/acled/read"
 
 # Freshness window
-FRESHNESS_WINDOW_DAYS = 14
+FRESHNESS_WINDOW_DAYS = 30
 
 # Load credentials
 try:
     from backend.config import settings
-    ACLED_API_KEY = getattr(settings, "acled_api_key", "") or ""
     ACLED_EMAIL = getattr(settings, "acled_email", "") or ""
+    ACLED_PASSWORD = getattr(settings, "acled_password", "") or ""
 except Exception:
-    ACLED_API_KEY = ""
     ACLED_EMAIL = ""
+    ACLED_PASSWORD = ""
 
 
 class ACLEDCollector(BaseCollector):
     """Fetches real conflict events from the ACLED API.
 
-    Requires ACLED API key and email to be configured in credentials.json:
-        {"acled_api_key": "YOUR_KEY", "acled_email": "YOUR_EMAIL"}
+    Requires ACLED email and password to be configured in credentials.json:
+        {"acled_email": "YOUR_EMAIL", "acled_password": "YOUR_PASSWORD"}
     """
 
     MAX_EVENTS = 200
@@ -49,23 +49,56 @@ class ACLEDCollector(BaseCollector):
         "Strategic developments": 1,
     }
 
-    def __init__(self, interval: int = 300):
+    def __init__(self, interval: int = 7200):
         super().__init__(name="acled", interval=interval)
         self._last_fetched_at: datetime | None = None
-        self._configured = bool(ACLED_API_KEY and ACLED_EMAIL)
+        self._configured = bool(ACLED_EMAIL and ACLED_PASSWORD)
+        self._logged_in = False
 
         if not self._configured:
             logger.warning(
-                "[acled] ACLED API key not configured. "
+                "[acled] ACLED email or password not configured. "
                 "Register at https://developer.acleddata.com/ and add "
-                '"acled_api_key" and "acled_email" to credentials.json'
+                '"acled_email" and "acled_password" to credentials.json'
             )
+
+    async def _login(self) -> bool:
+        """Authenticate with ACLED API via email/password."""
+        login_url = "https://acleddata.com/user/login?_format=json"
+        payload = {
+            "name": ACLED_EMAIL,
+            "pass": ACLED_PASSWORD
+        }
+        
+        if not self._http_client:
+            import httpx
+            self._http_client = httpx.AsyncClient(timeout=30.0)
+            
+        try:
+            resp = await self._http_client.post(login_url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            if "csrf_token" in data:
+                self._logged_in = True
+                logger.info("[acled] Successfully authenticated with ACLED API")
+                return True
+            else:
+                logger.error("[acled] Login failed: Unexpected response format")
+                return False
+        except Exception as e:
+            logger.error("[acled] Login failed: %s", e)
+            return False
 
     async def collect(self) -> list[dict]:
         """Fetch ACLED conflict events."""
         if not self._configured:
-            logger.info("[acled] Skipping — API key not configured")
+            logger.info("[acled] Skipping — credentials not configured")
             return []
+
+        if not self._logged_in:
+            success = await self._login()
+            if not success:
+                return []
 
         try:
             events = await self._fetch_acled_events()
@@ -73,6 +106,7 @@ class ACLEDCollector(BaseCollector):
             return events
         except Exception as e:
             logger.error("[acled] Fetch failed: %s", e)
+            self._logged_in = False  # Reset login status on error to try again next time
             return []
 
     async def _fetch_acled_events(self) -> list[dict]:
@@ -82,14 +116,19 @@ class ACLEDCollector(BaseCollector):
         event_date_filter = since_date.strftime("%Y-%m-%d")
 
         params = {
-            "key": ACLED_API_KEY,
-            "email": ACLED_EMAIL,
             "event_date": event_date_filter,
             "event_date_where": ">=",
             "limit": self.MAX_EVENTS,
         }
 
-        data = await self.fetch_json(ACLED_API_URL, params=params)
+        # The new ACLED API response structure includes cookies implicitly in the session.
+        # However, the ACLED v3 /api/acled/read endpoint requires querying via GET.
+        
+        # When querying /api/acled/read, ACLED's UI essentially uses the session.
+        # But looking at the user payload, it seems ACLED's python requests need to properly send
+        # cookies after the login to maintain the session. We use the existing httpx Session internally.
+        
+        data = await self.fetch_json("https://acleddata.com/api/acled/read", params=params)
 
         results = data.get("data", [])
         if not results:
@@ -123,7 +162,7 @@ class ACLEDCollector(BaseCollector):
         except (ValueError, TypeError):
             return None
 
-        data_id = record.get("data_id", "")
+        data_id = record.get("event_id_cnty", "")
         event_type = record.get("event_type", "Unknown")
         sub_event_type = record.get("sub_event_type", "")
         event_date = record.get("event_date", "")
@@ -135,6 +174,14 @@ class ACLEDCollector(BaseCollector):
         fatalities = int(record.get("fatalities", 0) or 0)
         notes = record.get("notes", "")
         source = record.get("source", "ACLED")
+        
+        # Handle the integer timestamp
+        timestamp_int = record.get("timestamp")
+        if timestamp_int:
+            # ACLED usually returns seconds or sometimes miliseconds depending on endpoint
+            timestamp = datetime.fromtimestamp(timestamp_int, timezone.utc).isoformat()
+        else:
+            timestamp = event_date or datetime.now(timezone.utc).isoformat()
 
         severity = self.SEVERITY_MAP.get(event_type, 2)
         if fatalities >= 10:
@@ -153,7 +200,7 @@ class ACLEDCollector(BaseCollector):
             "latitude": round(lat, 4),
             "longitude": round(lon, 4),
             "severity": severity,
-            "timestamp": event_date or datetime.now(timezone.utc).isoformat(),
+            "timestamp": timestamp,
             "source": f"ACLED ({source})",
             "title": f"{event_type} — {country}",
             "description": desc,
