@@ -189,63 +189,64 @@ def _vessel_type_label(type_code: int) -> str:
 # Format: [[lat1, lon1], [lat2, lon2]] (two opposite corners)
 # AISStream supports overlapping boxes without duplicate data.
 SHIPPING_BBOXES = [
-    # ── Large Ocean Basins ──
-    # North Atlantic (Europe ↔ Americas)
-    [[60.0, 0.0], [20.0, -60.0]],
-    # European waters + Mediterranean
-    [[60.0, 40.0], [30.0, -12.0]],
-    # Indian Ocean (Arabia ↔ SE Asia)
-    [[25.0, 80.0], [-10.0, 40.0]],
-    # South China Sea + Strait of Malacca + SE Asia
-    [[25.0, 125.0], [-5.0, 95.0]],
-    # East Asian waters (China, Japan, Korea)
-    [[45.0, 145.0], [20.0, 105.0]],
-    # Persian Gulf + Arabian Sea + Red Sea
-    [[32.0, 75.0], [10.0, 32.0]],
-    # West Africa + Gulf of Guinea
-    [[15.0, 15.0], [-10.0, -25.0]],
-    # East coast Americas + Caribbean
-    [[35.0, -60.0], [5.0, -100.0]],
-    # South Atlantic + Cape of Good Hope
-    [[-10.0, 20.0], [-45.0, -40.0]],
-    # Australia / Oceania
-    [[-5.0, 160.0], [-45.0, 110.0]],
-    # Bay of Bengal + Sri Lanka
-    [[22.0, 95.0], [5.0, 75.0]],
+    [[90.0, -180.0], [-90.0, 180.0]]
+    # # ── Large Ocean Basins ──
+    # # North Atlantic (Europe ↔ Americas)
+    # [[60.0, 0.0], [20.0, -60.0]],
+    # # European waters + Mediterranean
+    # [[60.0, 40.0], [30.0, -12.0]],
+    # # Indian Ocean (Arabia ↔ SE Asia)
+    # [[25.0, 80.0], [-10.0, 40.0]],
+    # # South China Sea + Strait of Malacca + SE Asia
+    # [[25.0, 125.0], [-5.0, 95.0]],
+    # # East Asian waters (China, Japan, Korea)
+    # [[45.0, 145.0], [20.0, 105.0]],
+    # # Persian Gulf + Arabian Sea + Red Sea
+    # [[32.0, 75.0], [10.0, 32.0]],
+    # # West Africa + Gulf of Guinea
+    # [[15.0, 15.0], [-10.0, -25.0]],
+    # # East coast Americas + Caribbean
+    # [[35.0, -60.0], [5.0, -100.0]],
+    # # South Atlantic + Cape of Good Hope
+    # [[-10.0, 20.0], [-45.0, -40.0]],
+    # # Australia / Oceania
+    # [[-5.0, 160.0], [-45.0, 110.0]],
+    # # Bay of Bengal + Sri Lanka
+    # [[22.0, 95.0], [5.0, 75.0]],
 
-    # ── Targeted port/coastal zones (where AIS ground stations exist) ──
-    # Mumbai / Western India coast
-    [[23.0, 75.0], [15.0, 68.0]],
-    # Chennai / East India coast
-    [[15.0, 83.0], [8.0, 77.0]],
-    # Sri Lanka + Colombo
-    [[10.0, 82.0], [5.0, 78.0]],
-    # Singapore / Johor Strait
-    [[2.0, 105.0], [0.5, 103.0]],
-    # Hong Kong / Pearl River Delta
-    [[23.0, 115.0], [21.0, 113.0]],
-    # Shanghai / Yangtze River
-    [[32.0, 123.0], [29.0, 120.0]],
-    # Dubai / Abu Dhabi / Fujairah
-    [[26.5, 57.0], [24.0, 53.0]],
-    # Jeddah / Red Sea
-    [[24.0, 42.0], [18.0, 36.0]],
-    # Tokyo Bay / Japan
-    [[36.0, 141.0], [34.0, 139.0]],
-    # Busan / Korea
-    [[36.0, 130.0], [34.0, 128.0]],
-    # Ho Chi Minh / Vietnam coast
-    [[12.0, 110.0], [8.0, 106.0]],
-    # Manila / Philippines
-    [[15.0, 122.0], [13.0, 119.0]],
-    # US West Coast (LA/Long Beach + SF)
-    [[38.0, -117.0], [32.0, -122.0]],
-    # US East Coast (NY/NJ)
-    [[41.0, -73.0], [38.0, -75.0]],
-    # Suez Canal + Port Said
-    [[32.0, 34.0], [29.0, 31.0]],
-    # Panama Canal
-    [[10.0, -79.0], [8.0, -80.5]],
+    # # ── Targeted port/coastal zones (where AIS ground stations exist) ──
+    # # Mumbai / Western India coast
+    # [[23.0, 75.0], [15.0, 68.0]],
+    # # Chennai / East India coast
+    # [[15.0, 83.0], [8.0, 77.0]],
+    # # Sri Lanka + Colombo
+    # [[10.0, 82.0], [5.0, 78.0]],
+    # # Singapore / Johor Strait
+    # [[2.0, 105.0], [0.5, 103.0]],
+    # # Hong Kong / Pearl River Delta
+    # [[23.0, 115.0], [21.0, 113.0]],
+    # # Shanghai / Yangtze River
+    # [[32.0, 123.0], [29.0, 120.0]],
+    # # Dubai / Abu Dhabi / Fujairah
+    # [[26.5, 57.0], [24.0, 53.0]],
+    # # Jeddah / Red Sea
+    # [[24.0, 42.0], [18.0, 36.0]],
+    # # Tokyo Bay / Japan
+    # [[36.0, 141.0], [34.0, 139.0]],
+    # # Busan / Korea
+    # [[36.0, 130.0], [34.0, 128.0]],
+    # # Ho Chi Minh / Vietnam coast
+    # [[12.0, 110.0], [8.0, 106.0]],
+    # # Manila / Philippines
+    # [[15.0, 122.0], [13.0, 119.0]],
+    # # US West Coast (LA/Long Beach + SF)
+    # [[38.0, -117.0], [32.0, -122.0]],
+    # # US East Coast (NY/NJ)
+    # [[41.0, -73.0], [38.0, -75.0]],
+    # # Suez Canal + Port Said
+    # [[32.0, 34.0], [29.0, 31.0]],
+    # # Panama Canal
+    # [[10.0, -79.0], [8.0, -80.5]],
 ]
 
 # ── Stable mock vessels (fallback when no API key) ─────────────────
@@ -295,7 +296,7 @@ class MarineCollector(BaseCollector):
     """
 
     AISSTREAM_URL = "wss://stream.aisstream.io/v0/stream"
-    MAX_VESSELS = 5000    # Increased cap to accommodate position-api vessels
+    MAX_VESSELS = 10000    # Increased cap to accommodate position-api vessels
     STALE_MINUTES = 60    # Drop vessels not seen for this many minutes
 
     def __init__(self, interval: int = 30):

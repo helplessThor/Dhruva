@@ -1,5 +1,4 @@
 """Dhruva — Internet Outage Collector (IODA alerts API)."""
-
 from __future__ import annotations
 
 import hashlib
@@ -70,10 +69,8 @@ SEVERITY_BY_LEVEL = {
     "normal": 1,
 }
 
-
 class OutageCollector(BaseCollector):
     """Collect internet outage alerts from IODA using discrete 30-minute windows."""
-
     def __init__(self, interval: int = WINDOW_SECONDS):
         super().__init__(name="outage", interval=interval)
 

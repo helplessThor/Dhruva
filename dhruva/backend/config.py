@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     aircraft_interval: int = 15
     marine_interval: int = 30
     cyber_interval: int = 60
-    outage_interval: int = 120
+    outage_interval: int = 1800
     economic_interval: int = 300
     military_interval: int = 120
     ucdp_interval: int = 600
