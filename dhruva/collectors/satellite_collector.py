@@ -1,12 +1,13 @@
 """Dhruva — Live Satellite Tracker (N2YO API).
 
-Fetches real-time positions for key satellite constellations and objects
-(e.g., Starlink, Military, GPS, ISS) using the N2YO 'What's up' endpoint.
+Fetches real-time positions for ALL satellite constellations and objects
+using the N2YO 'What's up' endpoint. Distributes API calls evenly to avoid
+the strict 1000 requests/hour limit.
 """
 
 import logging
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import httpx
 
 from collectors.base_collector import BaseCollector
@@ -15,27 +16,24 @@ logger = logging.getLogger("dhruva.collector")
 
 N2YO_API_URL = "https://api.n2yo.com/rest/v1/satellite/above/{lat}/{lon}/{alt}/{radius}/{category}/&apiKey={key}"
 
-# Satellite categories to track
-# 52: Starlink
-# 30: Military
-# 20: GPS
-# 10: Geostationary (Comms/Regional, e.g. IRNSS, GSAT)
-# 3: Weather (e.g. INSAT, NOAA, Meteosat)
-# 15: Iridium (Comms)
-# 27: Earth Resources (Polar Orbiting)
+# ALL 57 N2YO categories
 TRACKED_CATEGORIES = {
-    52: "Starlink",
-    30: "Military",
-    20: "GPS",
-    10: "Geostationary (Comms)",
-    3: "Weather",
-    15: "Iridium",
-    27: "Earth Observation"
+    18: "Amateur radio", 35: "Beidou Navigation System", 1: "Brightest", 45: "Celestis",
+    54: "Chinese Space Station", 32: "CubeSats", 8: "Disaster monitoring", 6: "Earth resources",
+    29: "Education", 28: "Engineering", 19: "Experimental", 48: "Flock", 22: "Galileo",
+    57: "GeeSAT", 27: "Geodetic", 10: "Geostationary", 50: "GPS Constellation", 20: "GPS Operational",
+    17: "Globalstar", 51: "Glonass Constellation", 21: "Glonass Operational", 5: "GOES",
+    40: "Gonets", 12: "Gorizont", 11: "Intelsat", 15: "Iridium", 46: "IRNSS", 2: "ISS",
+    56: "Kuiper", 49: "Lemur", 30: "Military", 14: "Molniya", 24: "Navy Navigation Satellite",
+    4: "NOAA", 43: "O3B Networks", 53: "OneWeb", 16: "Orbcomm", 38: "Parus", 55: "Qianfan",
+    47: "QZSS", 31: "Radar Calibration", 13: "Raduga", 25: "Russian LEO Navigation",
+    23: "SBAS", 7: "Search & rescue", 26: "Space & Earth Science",
+    52: "Starlink", 39: "Strela", 9: "TDRSS", 44: "Tselina",
+    42: "Tsikada", 41: "Tsiklon", 34: "TV", 3: "Weather", 37: "Westford Needles", 33: "XM and Sirius",
+    36: "Yaogan"
 }
 
-# 5 anchor points provide global coverage with a 70-degree search radius:
-# - North/South poles cover all longitudes in their hemispheres.
-# - 3 equatorial points overlap to cover the equatorial band.
+# 5 anchor points provide global coverage with a 70-degree search radius.
 ANCHOR_POINTS = [
     (80.0, 0.0),       # North Pole Region
     (-80.0, 0.0),      # South Pole Region
@@ -44,14 +42,22 @@ ANCHOR_POINTS = [
     (0.0, -120.0)      # Equator (Americas)
 ]
 
+
 class SatelliteCollector(BaseCollector):
     """Fetches satellite positions traversing the globe."""
 
     def __init__(self, interval: int = 60):
-        # 60 seconds is reasonable for satellite sweeps.
         super().__init__(name="satellite", interval=interval)
-        self._seen_satids: set[str] = set()
-        self._anchor_index = 0
+        
+        # Build master list of (category_id, lat, lon) to cycle through
+        self._combinations = []
+        for cat_id in TRACKED_CATEGORIES.keys():
+            for lat, lon in ANCHOR_POINTS:
+                self._combinations.append((cat_id, lat, lon))
+                
+        self._combo_index = 0
+        self._satellite_cache: dict[str, dict] = {} # satid -> OsintEvent raw dict
+        self._quota_exhausted_until: datetime = None
 
     def _get_api_key(self) -> str:
         try:
@@ -69,11 +75,14 @@ class SatelliteCollector(BaseCollector):
             resp.raise_for_status()
             data = resp.json()
             
-            # The API returns an 'info' dict and an 'above' list
             if "above" in data and data["above"]:
                 return data["above"]
             if "error" in data:
-                logger.error("[satellite] API Error for category %s: %s", cat_id, data["error"])
+                err = data["error"]
+                if "exceeded" in err.lower() or "transactions allowed" in err.lower():
+                    logger.warning("[satellite] N2YO Hourly Quota Exceeded. Suspending calls.")
+                    return "RATE_LIMIT"
+                logger.debug("[satellite] API msg for category %s: %s", cat_id, err)
             return []
             
         except httpx.HTTPStatusError as e:
@@ -87,7 +96,16 @@ class SatelliteCollector(BaseCollector):
             return []
 
     async def collect(self) -> list[dict]:
-        """Collect live satellite positions."""
+        """Collect live satellite positions with round-robin globally distributed payload limits."""
+        # 1. Check if we are currently in a rate-limit penalty box
+        if self._quota_exhausted_until:
+            if datetime.now(timezone.utc) < self._quota_exhausted_until:
+                # Still exhausted, return cached valid events but don't fetch
+                return self._purge_and_get_cache()
+            else:
+                self._quota_exhausted_until = None
+                logger.info("[satellite] N2YO API Quota penalty lifted. Resuming sweeps.")
+        
         api_key = self._get_api_key()
         if not api_key:
             logger.warning("[satellite] Cannot collect: N2YO API key missing.")
@@ -96,38 +114,39 @@ class SatelliteCollector(BaseCollector):
         if not self._http_client:
             self._http_client = httpx.AsyncClient(timeout=30.0)
 
-        # To avoid blasting the N2YO API and hitting rate limits (1000/hour),
-        # we rotate through our 5 anchor points. One anchor per cycle (60s).
-        # This results in 7 requests per minute (420/hour), safely under the limit.
-        current_anchor = ANCHOR_POINTS[self._anchor_index]
-        self._anchor_index = (self._anchor_index + 1) % len(ANCHOR_POINTS)
+        # We have 285 total combinations (57 cats * 5 anchors).
+        # Making 14 requests per minute = 840 requests/hour (comfortably under the 1000/hour limit).
+        # It takes ~20 minutes to complete a full global sweep but updates seamlessly in batches.
         
-        all_sats = []
-        seen_in_cycle = set()
-        
+        batch = []
+        for _ in range(14):
+            batch.append(self._combinations[self._combo_index])
+            self._combo_index = (self._combo_index + 1) % len(self._combinations)
+            
         tasks = []
-        for cat_id in TRACKED_CATEGORIES.keys():
-            lat, lon = current_anchor 
+        for cat_id, lat, lon in batch:
             tasks.append(self._fetch_category_at_anchor(api_key, cat_id, lat, lon))
                 
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
+        now_dt = datetime.now(timezone.utc)
+        now_iso = now_dt.isoformat()
+        
+        new_updates = 0
         for i, res in enumerate(results):
             if isinstance(res, Exception):
                 logger.error("[satellite] Async fetch task failed: %s", res)
                 continue
+            if res == "RATE_LIMIT":
+                # API limit hit. Suspend all calls for 60 minutes.
+                self._quota_exhausted_until = datetime.now(timezone.utc) + timedelta(minutes=60)
+                return self._purge_and_get_cache()
                 
-            cat_id = list(TRACKED_CATEGORIES.keys())[i]
-            cat_name = TRACKED_CATEGORIES[cat_id]
+            cat_id = batch[i][0]
+            cat_name = TRACKED_CATEGORIES.get(cat_id, "Unknown Type")
             
             for sat in res:
                 satid = str(sat.get("satid"))
-                
-                # Deduplicate if we saw this sat in a different anchor zone this cycle
-                if satid in seen_in_cycle:
-                    continue
-                seen_in_cycle.add(satid)
-                
                 satlat = sat.get("satlat")
                 satlng = sat.get("satlng")
                 satalt = sat.get("satalt")
@@ -136,23 +155,21 @@ class SatelliteCollector(BaseCollector):
                 if satlat is None or satlng is None:
                     continue
                     
-                # Calculate an arbitrary severity to make military/starlink visually distinct
-                # if needed, otherwise stick to 2.
                 severity = 2
-                if cat_id == 30: # Military
+                if cat_id in (30, 31): # Military / Radar Cal
                     severity = 3
-                elif cat_id == 52: # Starlink
+                elif cat_id in (52, 53, 56): # Starlink, OneWeb, Kuiper
                     severity = 1
                 
-                all_sats.append({
+                self._satellite_cache[satid] = {
                     "id": f"sat-{satid}",
                     "type": "satellite",
                     "latitude": round(float(satlat), 4),
                     "longitude": round(float(satlng), 4),
                     "severity": severity,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": now_iso,  # Mark when we last saw it
                     "source": "N2YO API",
-                    "title": f"{cat_name} Satellite — {name}",
+                    "title": f"{cat_name} — {name}",
                     "description": f"Altitude: {satalt} km · Launch: {sat.get('launchDate', 'Unknown')}",
                     "metadata": {
                         "satid": satid,
@@ -162,10 +179,26 @@ class SatelliteCollector(BaseCollector):
                         "designator": sat.get("intDesignator", ""),
                         "launch_date": sat.get("launchDate", "")
                     }
-                })
+                }
+                new_updates += 1
 
-        # Update historical cache bounds (kept for parity with base collector patterns)
-        self._seen_satids = set(list(seen_in_cycle)[:5000])
+        logger.info("[satellite] N2YO sweep yielded %d new updates. Active cache: %d tracking.", new_updates, len(self._satellite_cache))
+        return self._purge_and_get_cache()
 
-        logger.info("[satellite] N2YO fetched %d live satellite positions", len(all_sats))
-        return all_sats
+    def _purge_and_get_cache(self) -> list[dict]:
+        """Removes satellites not seen in 25 minutes from the cache and returns the active list."""
+        valid_events = []
+        now_dt = datetime.now(timezone.utc)
+        stale_threshold = now_dt - timedelta(minutes=25)
+        
+        for satid, event in list(self._satellite_cache.items()):
+            try:
+                fetched_dt = datetime.fromisoformat(event["timestamp"])
+                if fetched_dt < stale_threshold:
+                    del self._satellite_cache[satid]
+                else:
+                    valid_events.append(event)
+            except Exception:
+                del self._satellite_cache[satid]
+                
+        return valid_events
