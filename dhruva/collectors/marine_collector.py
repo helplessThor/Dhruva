@@ -634,6 +634,20 @@ class MarineCollector(BaseCollector):
 
             # ── Military classification ─────────────────────────────────
             is_military, mil_label = MilitaryMarineDetector.classify(v)
+            
+            # ── High Value Filter ───────────────────────────────────────
+            # Only track military, carrier groups, oil tankers, destroyers, frigates, patrollers, escorts
+            vtype_code = int(v.get("vessel_type_code", 0) or 0)
+            is_tanker = (80 <= vtype_code <= 89) or ("tanker" in vtype.lower())
+            
+            name_lower = name.lower()
+            dest_lower = destination.lower()
+            high_value_kws = ["carrier", "destroyer", "frigate", "patrol", "escort", "warship", "navy", "coast guard", "corvette", "submarine", "cruiser"]
+            is_high_value_named = any(kw in name_lower or kw in vtype.lower() or kw in dest_lower for kw in high_value_kws)
+            
+            if not (is_military or is_tanker or is_high_value_named):
+                continue
+
             event_type = "military_marine" if is_military else "marine"
             severity = 3 if is_military else 1  # Military vessels are higher severity
 
@@ -692,6 +706,18 @@ class MarineCollector(BaseCollector):
         now = datetime.now(timezone.utc).isoformat()
 
         for vid, v in self._mock_vessels.items():
+            is_tanker = "tanker" in v["type"].lower()
+            
+            name_lower = v["name"].lower()
+            type_lower = v["type"].lower()
+            high_value_kws = ["carrier", "destroyer", "frigate", "patrol", "escort", "warship", "navy", "coast guard", "corvette", "submarine", "cruiser"]
+            is_high_value = any(kw in name_lower or kw in type_lower for kw in high_value_kws)
+            
+            # Assume some mock vessels like Front Cougar might be tankers.
+            # Only yield if high value or tanker
+            if not (is_tanker or is_high_value):
+                continue
+                
             events.append({
                 "id": vid,
                 "type": "marine",
