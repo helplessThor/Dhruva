@@ -19,12 +19,16 @@ N2YO_API_URL = "https://api.n2yo.com/rest/v1/satellite/above/{lat}/{lon}/{alt}/{
 # 52: Starlink
 # 30: Military
 # 20: GPS
-# 18: Amateur Radio
+# 10: Geostationary (Comms/Regional, e.g. IRNSS, GSAT)
+# 3: Weather (e.g. INSAT, NOAA, Meteosat)
+# 15: Iridium (Comms)
 TRACKED_CATEGORIES = {
     52: "Starlink",
     30: "Military",
     20: "GPS",
-    18: "Amateur Radio"
+    10: "Geostationary (Comms)",
+    3: "Weather",
+    15: "Iridium"
 }
 
 # Anchor points to get global coverage since the API max search radius is 90 degrees.
