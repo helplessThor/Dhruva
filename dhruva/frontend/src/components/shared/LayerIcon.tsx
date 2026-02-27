@@ -115,6 +115,13 @@ const ICON_PATHS: Record<EventType, (c: string) => React.ReactNode> = {
             <path d="M8 2v1M8 13v1M2 8H1M15 8h-1" fill="none" stroke={c} strokeWidth="1.5" opacity="0.4" strokeLinecap="round" />
         </>
     ),
+    // Satellite: An orbital ring with a central orb
+    satellite: (c) => (
+        <>
+            <ellipse cx="8" cy="8" rx="6" ry="2" fill="none" stroke={c} strokeWidth="1.5" transform="rotate(-30 8 8)" />
+            <circle cx="8" cy="8" r="3" fill={c} />
+        </>
+    ),
 };
 
 interface LayerIconProps {

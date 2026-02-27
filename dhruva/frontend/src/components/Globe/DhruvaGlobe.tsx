@@ -101,6 +101,11 @@ const MARKER_DEFS: Record<EventType, { color: string; symbol: string; scale: num
         symbol: '<path d="M2 8c0 0 3-4 6-4s6 4 6 4-3 4-6 4-6-4-6-4z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="8" r="2.5" fill="#fff" /><path d="M8 2v1M8 13v1M2 8H1M15 8h-1" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.4" stroke-linecap="round" />',
         scale: 1,
     },
+    satellite: {
+        color: '#cbd5e1',
+        symbol: '<ellipse cx="8" cy="8" rx="6" ry="2" fill="none" stroke="#fff" stroke-width="1.5" transform="rotate(-30 8 8)" /><circle cx="8" cy="8" r="3" fill="#fff" />',
+        scale: 1.1,
+    },
 };
 
 /** Severity → glow strength (opacity multiplier for the halo) */

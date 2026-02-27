@@ -39,6 +39,7 @@ from collectors.ucdp_collector import UCDPCollector
 from collectors.acled_collector import ACLEDCollector
 from collectors.acled_cast_collector import ACLEDCastCollector
 from collectors.naval_collector import NavalCollector
+from collectors.satellite_collector import SatelliteCollector
 
 # ─── Logging ───────────────────────────────────────
 logging.basicConfig(
@@ -77,6 +78,7 @@ event_store: dict[str, list[dict]] = {
     "intel_hotspot": [],
     "convergence": [],
     "cii": [],
+    "satellite": [],
 }
 current_risk: dict = {"level": 1, "label": "NOMINAL", "color": "#00ff88"}
 
@@ -101,6 +103,7 @@ collectors = [
     ACLEDCollector(interval=settings.acled_interval),
     ACLEDCastCollector(interval=21600),  # Fetch every 6 hours
     NavalCollector(interval=settings.naval_interval),
+    SatelliteCollector(interval=settings.satellite_interval),
 ]
 
 # Layer types that trigger hotspot / convergence recompute

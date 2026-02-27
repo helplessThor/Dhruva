@@ -25,6 +25,7 @@ class EventType(str, Enum):
     ACLED_CAST = "acled_cast"
     NAVAL = "naval"
     INTEL_HOTSPOT = "intel_hotspot"
+    SATELLITE = "satellite"
 
 
 class Severity(int, Enum):
@@ -76,6 +77,7 @@ class LayerState(BaseModel):
     acled_cast: bool = True
     naval: bool = True
     intel_hotspot: bool = True
+    satellite: bool = False
 
 
 

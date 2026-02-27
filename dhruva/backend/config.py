@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     gdelt_interval: int = 300
     naval_interval: int = 3600
     gdelt_interval: int = 300
+    satellite_interval: int = 60
 
     # API Keys (optional — collectors use public APIs or mock data)
     acled_email: Optional[str] = None
@@ -50,6 +51,7 @@ class Settings(BaseSettings):
     ucdp_api_token: Optional[str] = None
     groq_api_key: Optional[str] = None
     threatfox_api_key: Optional[str] = None
+    n2yo_api_key: Optional[str] = None
 
     # OpenSky Network OAuth2 credentials
     opensky_client_id: str = ""
@@ -99,6 +101,12 @@ def _load_settings() -> Settings:
                 s.threatfox_api_key = creds.get("threatfox_api_key", "")
                 if s.threatfox_api_key:
                     _cfg_logger.info("ThreatFox credentials loaded from %s", creds_path.name)
+            
+            # N2YO API
+            if not s.n2yo_api_key:
+                s.n2yo_api_key = creds.get("n2yo_api_key", "")
+                if s.n2yo_api_key:
+                    _cfg_logger.info("N2YO credentials loaded from %s", creds_path.name)
         except Exception as e:
             _cfg_logger.warning("Failed to read credentials.json: %s", e)
 
