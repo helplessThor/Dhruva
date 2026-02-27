@@ -90,6 +90,15 @@ class UCDPCollector(BaseCollector):
                 
                 if time_diff < 48 * 3600 and dist_sq < 25.0:
                     is_duplicate = True
+                    # Append extra info from OSINT to official event
+                    osint_urls = osint_ev.get("metadata", {}).get("urls", [])
+                    if osint_urls:
+                        existing_urls = official_ev.get("metadata", {}).get("osint_urls", [])
+                        new_urls = list(set(existing_urls + osint_urls))
+                        official_ev["metadata"]["osint_urls"] = new_urls
+                        official_ev["metadata"]["osint_verified"] = True
+                        if "📰 **OSINT Reports**" not in official_ev["description"]:
+                            official_ev["description"] += f"\n\n📰 **OSINT Reports:**\n- {osint_urls[0]}"
                     break
                     
             if not is_duplicate:

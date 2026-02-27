@@ -119,6 +119,15 @@ class EarthquakeCollector(BaseCollector):
                 
                 if time_diff < 7200 and dist_sq < 25.0:
                     is_duplicate = True
+                    # Append OSINT extra info to USGS event
+                    osint_urls = osint_ev.get("metadata", {}).get("urls", [])
+                    if osint_urls:
+                        existing_urls = usgs_ev.get("metadata", {}).get("osint_urls", [])
+                        new_urls = list(set(existing_urls + osint_urls))
+                        usgs_ev["metadata"]["osint_urls"] = new_urls
+                        usgs_ev["metadata"]["osint_verified"] = True
+                        if "📰 **OSINT Reports**" not in usgs_ev["description"]:
+                            usgs_ev["description"] += f"\n\n📰 **OSINT Reports:**\n- {osint_urls[0]}"
                     break
                     
             if not is_duplicate:
