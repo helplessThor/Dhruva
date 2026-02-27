@@ -96,6 +96,11 @@ const MARKER_DEFS: Record<EventType, { color: string; symbol: string; scale: num
         symbol: '<path d="M2 10l1-5h8l2 5z" fill="#fff" opacity="0.8" /><path d="M4 5V3h4v2" fill="none" stroke="#fff" stroke-width="1.5" /><path d="M1 12c2 1 4-1 6 0s4 1 6 0 2-1 2-1" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />',
         scale: 1.1,
     },
+    military_marine: {
+        color: '#3b82f6',
+        symbol: '<path d="M2 10l1-5h8l2 5z" fill="#fff" opacity="0.8" /><path d="M4 5V3h4v2" fill="none" stroke="#fff" stroke-width="1.5" /><path d="M1 12c2 1 4-1 6 0s4 1 6 0 2-1 2-1" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />',
+        scale: 1.1,
+    },
     intel_hotspot: {
         color: '#fbbf24',
         symbol: '<path d="M2 8c0 0 3-4 6-4s6 4 6 4-3 4-6 4-6-4-6-4z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="8" r="2.5" fill="#fff" /><path d="M8 2v1M8 13v1M2 8H1M15 8h-1" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.4" stroke-linecap="round" />',
@@ -132,7 +137,6 @@ function buildMarkerSvg(type: EventType, severity: number): string {
     const haloId = `halo-${type}-${severity}`;
     const glassId = `glass-${type}-${severity}`;
     const ringId = `ring-${type}-${severity}`;
-    const shadowId = `shadow-${type}-${severity}`;
 
     // Scale the 16x16 icon path up to fit nicely inside the glowing halo
     const symbolScale = Math.max(1.8, def.scale * 2.2);

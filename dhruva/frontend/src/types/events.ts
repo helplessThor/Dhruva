@@ -22,6 +22,7 @@ export type EventType =
     | 'economic'
     | 'military'
     | 'military_aircraft'
+    | 'military_marine'
     | 'ucdp'
     | 'acled'
     | 'acled_cast'
@@ -68,12 +69,13 @@ export const LAYER_CONFIGS: LayerConfig[] = [
     { id: 'earthquake', label: 'Earthquakes', icon: 'earthquake', color: '#ff6600', enabled: true },
     { id: 'fire', label: 'Active Fires', icon: 'fire', color: '#ff2d20', enabled: false },
     { id: 'aircraft', label: 'Aircraft', icon: 'aircraft', color: '#00bfff', enabled: false },
-    { id: 'marine', label: 'Marine', icon: 'marine', color: '#0077cc', enabled: false },
+    { id: 'marine', label: 'Marine Tracking', icon: 'marine', color: '#0077cc', enabled: true },
     { id: 'cyber', label: 'Cyber Attacks', icon: 'cyber', color: '#9333ea', enabled: false },
     { id: 'outage', label: 'Outages', icon: 'outage', color: '#f59e0b', enabled: true },
     { id: 'economic', label: 'Economic', icon: 'economic', color: '#10b981', enabled: false },
     { id: 'military', label: 'Military Zones', icon: 'military', color: '#4ade80', enabled: false },
     { id: 'military_aircraft', label: 'Military Aircraft', icon: 'military_aircraft', color: '#a3e635', enabled: true },
+    { id: 'military_marine', label: 'Military Vessels', icon: 'marine', color: '#3b82f6', enabled: true },
     { id: 'ucdp', label: 'UCDP (Conflicts)', icon: 'ucdp', color: '#e11d48', enabled: true },
     { id: 'acled', label: 'ACLED Events', icon: 'acled', color: '#f97316', enabled: true },
     { id: 'acled_cast', label: 'Predicted Conflict Alert', icon: 'acled', color: '#fbbf24', enabled: true },
