@@ -21,14 +21,14 @@ RSS_FEEDS = [
 class EarthquakeCollector(BaseCollector):
     """Fetches real-time earthquake data from USGS."""
 
-    API_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
+    API_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
 
-    FRESHNESS_HOURS = 36
+    FRESHNESS_HOURS = 24
     OSINT_THROTTLE_SECONDS = 3600
 
     def __init__(self, interval: int = 30):
         super().__init__(name="earthquake", interval=interval)
-        self.retention_hours = 12.0
+        self.retention_hours = 48.0
         
         # State tracking for OSINT Scraper
         self._last_osint_scrape: datetime | None = None
@@ -113,11 +113,11 @@ class EarthquakeCollector(BaseCollector):
                 except:
                     u_time = now
                     
-                # Time within 2 hours AND distance roughly within 5 degrees (approx 500km)
+                # Expand merge radius to be highly aggressive! (48 hours, ~10 degrees)
                 time_diff = abs((o_time - u_time).total_seconds())
                 dist_sq = (o_lat - u_lat)**2 + (o_lon - u_lon)**2
                 
-                if time_diff < 7200 and dist_sq < 25.0:
+                if time_diff < 48 * 3600 and dist_sq < 100.0:
                     is_duplicate = True
                     # Append OSINT extra info to USGS event
                     osint_urls = osint_ev.get("metadata", {}).get("urls", [])
@@ -181,8 +181,6 @@ class EarthquakeCollector(BaseCollector):
                             
                         # Extract hint
                         lat, lon, loc_name, mag = self._extract_earthquake_coords(title_lower)
-                        if lat is None:
-                            continue  # Drop unknown locations instead of rendering ghost coordinates
                         
                         if loc_name not in events_by_region:
                             events_by_region[loc_name] = {
@@ -252,6 +250,10 @@ class EarthquakeCollector(BaseCollector):
                 lat = result.get("lat")
                 lon = result.get("lon")
                 if lat is None or lon is None:
+                    # If LLM didn't extract a coord, and naive method returned (0,0), skip it
+                    if data["lat"] == 0.0 and data["lon"] == 0.0:
+                        logger.debug("[earthquake] Groq AI verified earthquake but could not resolve coordinates.")
+                        continue
                     lat, lon = data["lat"], data["lon"]
                     
                 mag = float(result.get("magnitude", data["mag"]))
@@ -285,7 +287,11 @@ class EarthquakeCollector(BaseCollector):
                     logger.warning("[earthquake] Groq AI Rate Limit Reached! Using Fallback Strategy for '%s'", loc_name)
                 else:
                     logger.debug("[earthquake] Failed to parse Groq OSINT response: %s", e)
-                
+                # Fallback Strategy: Retain the event as SUSPECTED/PENDING AI VERIFICATION
+                # But only if our naive coordinate extractor found something besides (0,0)
+                if data["lat"] == 0.0 and data["lon"] == 0.0:
+                    continue
+                    
                 event_id = str(hash(loc_name + str(data['latest_time'])))[:10].replace("-", "")
                 osint_results.append({
                     "id": f"eq-osint-fallback-{event_id}",
@@ -337,5 +343,5 @@ class EarthquakeCollector(BaseCollector):
         if "papua new guinea" in text: return -6.3, 143.9, "Papua New Guinea", mag
         if "greece" in text: return 39.0, 22.0, "Greece", mag
         
-        # If no country detected safely return None to avoid ghost locations
-        return None, None, None, mag
+        # If no country detected safely return generic fallback to allow Groq processing
+        return 0.0, 0.0, f"Unknown_Loc_{str(hash(text))[:8]}", mag

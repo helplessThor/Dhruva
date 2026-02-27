@@ -88,7 +88,7 @@ class UCDPCollector(BaseCollector):
                 time_diff = abs((o_time - u_time).total_seconds())
                 dist_sq = (o_lat - u_lat)**2 + (o_lon - u_lon)**2
                 
-                if time_diff < 48 * 3600 and dist_sq < 25.0:
+                if time_diff < 48 * 3600 and dist_sq < 100.0:
                     is_duplicate = True
                     # Append extra info from OSINT to official event
                     osint_urls = osint_ev.get("metadata", {}).get("urls", [])
