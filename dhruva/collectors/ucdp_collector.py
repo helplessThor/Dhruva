@@ -286,7 +286,7 @@ class UCDPCollector(BaseCollector):
                 "}"
             )
             try:
-                ai_response = await self.ask_groq(ai_prompt)
+                ai_response = await self.ask_groq(ai_prompt, json_mode=True)
                 
                 # Try to safely extract just the JSON part
                 import re, json

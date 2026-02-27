@@ -226,7 +226,7 @@ class EarthquakeCollector(BaseCollector):
                 "}"
             )
             try:
-                ai_response = await self.ask_groq(ai_prompt)
+                ai_response = await self.ask_groq(ai_prompt, json_mode=True)
                 
                 # Try safely extracting JSON chunk
                 import re, json
