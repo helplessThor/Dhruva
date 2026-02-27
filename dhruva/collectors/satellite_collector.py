@@ -22,22 +22,26 @@ N2YO_API_URL = "https://api.n2yo.com/rest/v1/satellite/above/{lat}/{lon}/{alt}/{
 # 10: Geostationary (Comms/Regional, e.g. IRNSS, GSAT)
 # 3: Weather (e.g. INSAT, NOAA, Meteosat)
 # 15: Iridium (Comms)
+# 27: Earth Resources (Polar Orbiting)
 TRACKED_CATEGORIES = {
     52: "Starlink",
     30: "Military",
     20: "GPS",
     10: "Geostationary (Comms)",
     3: "Weather",
-    15: "Iridium"
+    15: "Iridium",
+    27: "Earth Observation"
 }
 
-# Anchor points to get global coverage since the API max search radius is 90 degrees.
-# Four points roughly provide full global coverage at 90 deg radius.
+# 5 anchor points provide global coverage with a 70-degree search radius:
+# - North/South poles cover all longitudes in their hemispheres.
+# - 3 equatorial points overlap to cover the equatorial band.
 ANCHOR_POINTS = [
-    (0.0, 0.0),       # Null Island (Africa/Atlantic)
-    (0.0, 90.0),      # Indian Ocean / Asia
-    (0.0, 180.0),     # Pacific
-    (0.0, -90.0)      # Americas
+    (80.0, 0.0),       # North Pole Region
+    (-80.0, 0.0),      # South Pole Region
+    (0.0, 0.0),        # Equator (Africa/Europe)
+    (0.0, 120.0),      # Equator (Asia/Pacific)
+    (0.0, -120.0)      # Equator (Americas)
 ]
 
 class SatelliteCollector(BaseCollector):
@@ -47,6 +51,7 @@ class SatelliteCollector(BaseCollector):
         # 60 seconds is reasonable for satellite sweeps.
         super().__init__(name="satellite", interval=interval)
         self._seen_satids: set[str] = set()
+        self._anchor_index = 0
 
     def _get_api_key(self) -> str:
         try:
@@ -91,22 +96,19 @@ class SatelliteCollector(BaseCollector):
         if not self._http_client:
             self._http_client = httpx.AsyncClient(timeout=30.0)
 
-        # To avoid blasting the N2YO API and hitting rate limits (usually 1000/hour),
-        # we will fetch just one category per anchor point per cycle, cycling through them.
+        # To avoid blasting the N2YO API and hitting rate limits (1000/hour),
+        # we rotate through our 5 anchor points. One anchor per cycle (60s).
+        # This results in 7 requests per minute (420/hour), safely under the limit.
+        current_anchor = ANCHOR_POINTS[self._anchor_index]
+        self._anchor_index = (self._anchor_index + 1) % len(ANCHOR_POINTS)
         
         all_sats = []
         seen_in_cycle = set()
         
-        # In a single iteration, let's fetch one category globally (all 4 anchors) to avoid 
-        # doing 16 total calls per minute (which is 960/hour, dangerously close to limits).
-        # We will iterate through all categories and anchors.
-        
         tasks = []
         for cat_id in TRACKED_CATEGORIES.keys():
-            # Only use two anchor points to cut down API calls by 50%.
-            # The satellites move fast enough that we'll catch them eventually.
-            for lat, lon in [(0.0, 0.0), (0.0, 180.0)]: 
-                tasks.append(self._fetch_category_at_anchor(api_key, cat_id, lat, lon))
+            lat, lon = current_anchor 
+            tasks.append(self._fetch_category_at_anchor(api_key, cat_id, lat, lon))
                 
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
@@ -115,7 +117,7 @@ class SatelliteCollector(BaseCollector):
                 logger.error("[satellite] Async fetch task failed: %s", res)
                 continue
                 
-            cat_id = list(TRACKED_CATEGORIES.keys())[i // 2]
+            cat_id = list(TRACKED_CATEGORIES.keys())[i]
             cat_name = TRACKED_CATEGORIES[cat_id]
             
             for sat in res:
