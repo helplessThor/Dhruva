@@ -141,7 +141,7 @@ class FireCollector(BaseCollector):
                 severity = self._brightness_to_severity(brightness)
                 conf_label = self._confidence_label(conf)
                 
-                # Keep nominal and high confidence, ignore low confidence
+                # Keep high confidence, ignore low/nominal confidence
                 if conf_label == "Low" or conf_label == "Nominal":
                     continue
 

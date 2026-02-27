@@ -22,13 +22,7 @@ const ICON_PATHS: Record<EventType, (c: string) => React.ReactNode> = {
             opacity="0.9"
         />
     ),
-    // Conflict: crossed swords / battle marker
-    conflict: (c) => (
-        <>
-            <path d="M4 12l8-8M12 12L4 4" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" />
-            <circle cx="8" cy="8" r="7" fill="none" stroke={c} strokeWidth="1.5" opacity="0.5" />
-        </>
-    ),
+
     // Aircraft: commercial plane silhouette from above
     aircraft: (c) => (
         <path
@@ -91,11 +85,26 @@ const ICON_PATHS: Record<EventType, (c: string) => React.ReactNode> = {
             <path d="M8 6v3M8 11.5v.5" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" />
         </>
     ),
-    // ACLED: map marker / POI pin
     acled: (c) => (
         <>
             <path d="M8 1C5.5 1 3.5 3 3.5 5.5c0 3 4.5 9.5 4.5 9.5s4.5-6.5 4.5-9.5C12.5 3 10.5 1 8 1z" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round" />
             <circle cx="8" cy="5.5" r="2" fill={c} />
+        </>
+    ),
+    // ACLED Cast: predictive heatmap/radar alert style 
+    acled_cast: (c) => (
+        <>
+            <path d="M8 1C5.5 1 3.5 3 3.5 5.5c0 3 4.5 9.5 4.5 9.5s4.5-6.5 4.5-9.5C12.5 3 10.5 1 8 1z" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round" />
+            <circle cx="8" cy="5.5" r="2" fill="none" stroke={c} />
+            <path d="M4 5.5h8M8 1.5v8" fill="none" stroke={c} strokeWidth="1" opacity="0.6" />
+        </>
+    ),
+    // Naval: marine icon duplicate
+    naval: (c) => (
+        <>
+            <path d="M2 10l1-5h8l2 5z" fill={c} opacity="0.8" />
+            <path d="M4 5V3h4v2" fill="none" stroke={c} strokeWidth="1.5" />
+            <path d="M1 12c2 1 4-1 6 0s4 1 6 0 2-1 2-1" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" />
         </>
     ),
     // Intel Hotspot: glowing radar blip or scanning eye

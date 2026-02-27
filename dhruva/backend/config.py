@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     cesium_ion_token: str = ""
 
     # Collector intervals (seconds)
-    earthquake_interval: int = 60
+    earthquake_interval: int = 30
     fire_interval: int = 600
     conflict_interval: int = 3600
     aircraft_interval: int = 15
@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     adsb_api_key: Optional[str] = None
     ucdp_api_token: Optional[str] = None
     groq_api_key: Optional[str] = None
+    threatfox_api_key: Optional[str] = None
 
     # OpenSky Network OAuth2 credentials
     opensky_client_id: str = ""
@@ -92,6 +93,12 @@ def _load_settings() -> Settings:
                 s.groq_api_key = creds.get("groq_api_key", "")
                 if s.groq_api_key:
                     _cfg_logger.info("Groq API credentials loaded from %s", creds_path.name)
+            
+            # ThreatFox API
+            if not s.threatfox_api_key:
+                s.threatfox_api_key = creds.get("threatfox_api_key", "")
+                if s.threatfox_api_key:
+                    _cfg_logger.info("ThreatFox credentials loaded from %s", creds_path.name)
         except Exception as e:
             _cfg_logger.warning("Failed to read credentials.json: %s", e)
 

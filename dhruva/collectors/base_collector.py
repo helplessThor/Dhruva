@@ -77,13 +77,14 @@ class BaseCollector(ABC):
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "llama3-8b-8192",
+            "model": "llama-3.3-70b-versatile",
             "messages": [
-                {"role": "system", "content": system},
+                {"role": "system", "content": f"{system}\nYou MUST output strictly valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.0,
-            "max_tokens": 150
+            "max_tokens": 500,
+            "response_format": {"type": "json_object"}
         }
         
         try:
@@ -91,6 +92,9 @@ class BaseCollector(ABC):
             resp.raise_for_status()
             data = resp.json()
             return data["choices"][0]["message"]["content"].strip()
+        except httpx.HTTPStatusError as e:
+            logger.error("[%s] Groq API HTTP error %s: %s", self.name, e.response.status_code, e.response.text)
+            return ""
         except Exception as e:
             logger.error("[%s] Groq API inference failed: %s", self.name, e)
             return ""

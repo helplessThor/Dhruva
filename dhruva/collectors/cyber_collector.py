@@ -1,282 +1,220 @@
-"""Dhruva — Cyber Threat Collector (AlienVault OTX).
+"""Dhruva — Cyber Threat Collector (ThreatFox API).
 
-Uses the AlienVault Open Threat Exchange (OTX) API to surface real,
-live threat intelligence: active malware campaigns, C2 infrastructure,
-phishing kits, ransomware, APT activity — all with real geo attribution.
+Uses the abuse.ch ThreatFox API to surface real, live threat intelligence:
+active malware campaigns, C2 infrastructure, botnets — all with real geo attribution.
 
-API key is loaded from credentials.json → "otx_api_key" or env var
-DHRUVA_OTX_API_KEY. The OTX API is free; the key simply unlocks
-subscribed pulses and higher rate limits.
+API key is loaded from credentials.json -> "threatfox_api_key".
 
-No mock data. No synthetic events. Returns [] on API failure.
+Geolocates IOCs (IPs) using the free ip-api.com batch endpoint.
 """
 
 import logging
-import os
 from datetime import datetime, timezone
-from pathlib import Path
+import httpx
 
 from collectors.base_collector import BaseCollector
 
 logger = logging.getLogger("dhruva.collector")
 
-# ── Load OTX API key ────────────────────────────────────────────────
-_CREDS_FILE = Path(__file__).resolve().parent.parent / "credentials.json"
-OTX_API_KEY: str = ""
+THREATFOX_API_URL = "https://threatfox-api.abuse.ch/api/v1/"
+IP_API_BATCH_URL  = "http://ip-api.com/batch"
 
-try:
-    if _CREDS_FILE.exists():
-        import json as _json
-        _creds = _json.loads(_CREDS_FILE.read_text(encoding="utf-8"))
-        OTX_API_KEY = _creds.get("otx_api_key", "")
-        if OTX_API_KEY:
-            logger.info("[cyber] OTX API key loaded from credentials.json")
-except Exception as _e:
-    logger.warning("[cyber] Could not read credentials.json: %s", _e)
-
-if not OTX_API_KEY:
-    OTX_API_KEY = os.environ.get("DHRUVA_OTX_API_KEY", "")
-    if OTX_API_KEY:
-        logger.info("[cyber] OTX API key loaded from env")
-    else:
-        logger.warning("[cyber] No OTX API key found — cyber layer will be inactive")
-
-
-# ── Country-code → centroid look-up ─────────────────────────────────
-# Used to geo-locate OTX indicators that carry only a country code.
-# Covers the most commonly seen source/target countries in threat intel.
-COUNTRY_CENTROIDS: dict[str, tuple[float, float]] = {
-    "US": (37.09,  -95.71),  "RU": (61.52,   105.31), "CN": (35.86,   104.19),
-    "BR": (-14.24,  -51.93), "DE": (51.17,    10.45),  "IN": (20.59,    78.96),
-    "GB": (55.38,   -3.44),  "FR": (46.23,     2.21),  "JP": (36.20,   138.25),
-    "KP": (40.34,  127.51),  "IR": (32.43,    53.69),  "UA": (48.38,    31.17),
-    "PK": (30.37,   69.35),  "NG": (9.08,      8.68),  "TR": (38.96,    35.24),
-    "ID": (-0.79,  113.92),  "NL": (52.09,     5.29),  "AU": (-25.27,  133.78),
-    "CA": (56.13,  -106.35), "MX": (23.63,   -102.55), "SG": (1.35,    103.82),
-    "KR": (35.91,  127.77),  "VN": (14.06,   108.28),  "BD": (23.68,    90.36),
-    "ZA": (-30.56,  22.94),  "EG": (26.82,    30.80),  "AR": (-38.42, -63.62),
-    "IT": (41.87,   12.57),  "ES": (40.46,   -3.75),   "PL": (51.92,   19.15),
-    "SA": (23.89,   45.08),  "TH": (15.87,  100.99),   "RO": (45.94,   24.97),
-    "UA": (48.38,   31.17),  "TW": (23.70,  120.96),   "HK": (22.40,  114.11),
-    "IL": (31.05,   34.85),  "AE": (23.42,   53.85),   "SE": (60.13,   18.64),
-    "CH": (46.82,    8.23),  "BE": (50.50,    4.47),   "NO": (60.47,    8.47),
-    "FI": (61.92,   25.75),  "CZ": (49.82,   15.47),   "HU": (47.16,   19.51),
-    "BY": (53.71,   27.95),  "AZ": (40.14,   47.58),   "LB": (33.85,   35.86),
-    "SY": (34.80,   38.99),  "YE": (15.55,   48.52),   "IQ": (33.22,   43.68),
-    "MM": (21.91,   95.96),  "ET": (9.14,    40.49),   "KE": (-0.02,   37.91),
-    "TZ": (-6.37,  34.89),   "GH": (7.95,    -1.02),   "CI": (7.54,   -5.55),
-    "MY": (4.21,  108.00),   "PH": (12.88,  121.77),   "LY": (26.34,   17.23),
-}
-
-# ── Severity mapping ──────────────────────────────────────────────────
-_TLP_SEVERITY = {
-    "white": 1, "green": 2, "amber": 3, "red": 4, "": 2,
-}
-
+# Severity mappings based on ThreatFox tags or malware names
 _ATTACK_KEYWORDS = {
-    "ransomware": 4, "apt": 4, "zero-day": 5, "zero day": 5, "supply chain": 4,
-    "ddos": 3, "phishing": 2, "malware": 3, "trojan": 3, "botnet": 3,
-    "c2": 3, "c&c": 3, "command and control": 3, "exploit": 4,
-    "data exfil": 4, "exfiltration": 4, "credential": 3, "bruteforce": 2,
-    "brute force": 2, "keylog": 3, "backdoor": 4, "rootkit": 4,
-    "worm": 3, "cryptominer": 2, "skimmer": 3,
+    "ransomware": 5, "apt": 5, "cobalt strike": 5, "cobalt_strike": 5,
+    "botnet": 3, "c2": 4, "c&c": 4, "command and control": 4,
+    "trojan": 3, "stealer": 4, "phishing": 2, "malware": 3, "miner": 2
 }
-
-OTX_SUBSCRIBED_URL = "https://otx.alienvault.com/api/v1/pulses/subscribed"
-OTX_RECENT_URL     = "https://otx.alienvault.com/api/v1/pulses/activity"
-
 
 class CyberCollector(BaseCollector):
-    """Fetches live threat intelligence pulses from AlienVault OTX.
-
-    Each OTX pulse describes a real threat campaign or incident, with:
-      - adversary / actor attribution
-      - targeted industries and countries
-      - malware families
-      - indicator types (IP, domain, hash, URL)
-      - TLP classification
-
-    This collector surfaces the most recent pulses and geo-locates them
-    using country attribution from each pulse's targeted_countries field
-    or the indicator's country_code.
+    """Fetches live threat intelligence IOCs from ThreatFox.
+    
+    Filters for IP-based IOCs (ip:port, ipv4) to ensure they can be mapped
+    to a physical location on the globe. Batches the IPs to ip-api.com to
+    resolve their lat/lon coordinates natively.
     """
 
-    PULSE_LIMIT = 50   # pulses per fetch cycle
-
     def __init__(self, interval: int = 120):
+        # 2 minutes interval is reasonable. ThreatFox updates frequently.
         super().__init__(name="cyber", interval=interval)
         self._seen_ids: set[str] = set()
 
-    @staticmethod
-    def _pulse_severity(pulse: dict) -> int:
-        """Derive severity 1-5 from TLP level and attack keywords."""
-        tlp = (pulse.get("tlp") or "").lower()
-        base = _TLP_SEVERITY.get(tlp, 2)
+    def _get_api_key(self) -> str:
+        try:
+            from backend.config import settings
+            return getattr(settings, "threatfox_api_key", "") or ""
+        except Exception:
+            return ""
 
-        # Bump severity based on attack-type keywords in name/description
-        name = (pulse.get("name") or "").lower()
-        desc = (pulse.get("description") or "").lower()
-        combined = f"{name} {desc}"
+    @staticmethod
+    def _pulse_severity(malware: str, threat_type: str, tags: list[str]) -> int:
+        """Derive severity 1-5 from malware name and tags."""
+        combined = f"{malware} {threat_type} {' '.join(tags)}".lower()
+        base = 2
         for kw, sev in _ATTACK_KEYWORDS.items():
             if kw in combined:
                 base = max(base, sev)
-
         return min(base, 5)
 
-    @staticmethod
-    def _classify_attack(pulse: dict) -> str:
-        """Return the best human-readable attack classification."""
-        tags = [t.lower() for t in (pulse.get("tags") or [])]
-        name = (pulse.get("name") or "").lower()
-        combined = f"{name} {' '.join(tags)}"
-
-        priority = [
-            ("zero-day", "Zero-Day Exploit"),
-            ("zero day", "Zero-Day Exploit"),
-            ("ransomware", "Ransomware"),
-            ("apt", "APT Intrusion"),
-            ("supply chain", "Supply Chain Attack"),
-            ("data exfil", "Data Exfiltration"),
-            ("exfiltration", "Data Exfiltration"),
-            ("backdoor", "Backdoor / RAT"),
-            ("rootkit", "Rootkit"),
-            ("ddos", "DDoS Campaign"),
-            ("phishing", "Phishing Campaign"),
-            ("credential", "Credential Theft"),
-            ("c&c", "C2 Infrastructure"),
-            ("c2", "C2 Infrastructure"),
-            ("botnet", "Botnet Activity"),
-            ("trojan", "Trojan"),
-            ("worm", "Worm"),
-            ("malware", "Malware Campaign"),
-        ]
-        for kw, label in priority:
-            if kw in combined:
-                return label
-        return "Threat Intelligence"
-
-    def _geo_locate_pulse(self, pulse: dict) -> tuple[float, float] | None:
-        """Return (lat, lon) for the pulse target, or None if unavailable."""
-        # 1. Prefer explicit targeted countries
-        targeted = pulse.get("targeted_countries") or []
-        for country in targeted:
-            code = country.strip().upper()
-            coords = COUNTRY_CENTROIDS.get(code)
-            if coords:
-                return coords
-
-        # 2. Try adversary country
-        adversary_countries = pulse.get("adversary") and []   # advisory field
-        # (OTX adversary is a name string, not a code — not useful for geo)
-
-        # 3. Try industries targeted as a last resort (skip — no geo info)
-        return None
+    async def _geocode_ips(self, ips: list[str]) -> dict[str, dict]:
+        """Batch geocode a list of IPs using ip-api.com."""
+        if not ips:
+            return {}
+            
+        # ip-api allows up to 100 IPs per batch.
+        # Ensure we only take unique IPs and limit to 100.
+        unique_ips = list(set(ips))[:100]
+        
+        if not self._http_client:
+            self._http_client = httpx.AsyncClient(timeout=30.0)
+            
+        try:
+            resp = await self._http_client.post(
+                IP_API_BATCH_URL, 
+                json=unique_ips,
+                timeout=15.0
+            )
+            resp.raise_for_status()
+            results = resp.json()
+            
+            geo_map = {}
+            for r in results:
+                if r.get("status") == "success":
+                    geo_map[r["query"]] = {
+                        "lat": r.get("lat"),
+                        "lon": r.get("lon"),
+                        "country": r.get("country", "Unknown"),
+                        "city": r.get("city", "Unknown")
+                    }
+            return geo_map
+        except Exception as e:
+            logger.error("[cyber] IP geocoding failed: %s", e)
+            return {}
 
     async def collect(self) -> list[dict]:
-        """Fetch latest threat pulses from AlienVault OTX."""
-        if not OTX_API_KEY:
-            logger.warning("[cyber] OTX API key not configured, skipping collection")
+        """Fetch latest IOCs from ThreatFox."""
+        api_key = self._get_api_key()
+        if not api_key:
+            logger.warning("[cyber] Cannot collect: ThreatFox API key missing.")
             return []
 
         if not self._http_client:
-            import httpx
             self._http_client = httpx.AsyncClient(timeout=30.0)
 
-        headers = {"X-OTX-API-KEY": OTX_API_KEY}
-        params  = {"limit": self.PULSE_LIMIT, "page": 1}
+        headers = {"Auth-Key": api_key}
+        payload = {"query": "get_iocs", "days": 1}
 
         try:
-            resp = await self._http_client.get(
-                OTX_SUBSCRIBED_URL, headers=headers, params=params, timeout=30.0
+            resp = await self._http_client.post(
+                THREATFOX_API_URL, headers=headers, json=payload, timeout=30.0
             )
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            logger.error("[cyber] OTX API request failed: %s", e)
+            logger.error("[cyber] ThreatFox API request failed: %s", e)
             return []
 
-        pulses = data.get("results", [])
-        if not pulses:
-            logger.warning("[cyber] OTX returned no pulses")
+        if data.get("query_status") != "ok":
+            logger.warning("[cyber] ThreatFox returned status: %s", data.get("query_status"))
             return []
 
+        iocs_data = data.get("data", [])
+        if not iocs_data:
+            logger.debug("[cyber] ThreatFox returned no new IOCs")
+            return []
+
+        # Filter for IP IOCs we haven't seen yet
+        ip_iocs = []
+        ips_to_geocode = []
+        for ioc in iocs_data:
+            ioc_id = str(ioc.get("id", ""))
+            if not ioc_id or ioc_id in self._seen_ids:
+                continue
+                
+            ioc_type = ioc.get("ioc_type", "")
+            if ioc_type in ("ip:port", "ipv4"):
+                # Extract clean IP
+                raw_ioc = ioc.get("ioc", "")
+                clean_ip = raw_ioc.split(":")[0] if ":" in raw_ioc else raw_ioc
+                iocs_data_item = ioc.copy()
+                iocs_data_item["_clean_ip"] = clean_ip
+                
+                ip_iocs.append(iocs_data_item)
+                ips_to_geocode.append(clean_ip)
+
+        if not ip_iocs:
+            return []
+            
+        # Geocode the IPs (limit to 100 per cycle to respect priority limits)
+        geo_map = await self._geocode_ips(ips_to_geocode[:100])
+        
         events = []
-        for pulse in pulses:
-            pulse_id = pulse.get("id", "")
-            if pulse_id in self._seen_ids:
-                continue
-
-            coords = self._geo_locate_pulse(pulse)
-            if not coords:
-                # Try to find geo from indicators
-                for indicator in (pulse.get("indicators") or [])[:20]:
-                    cc = (indicator.get("country_code") or "").upper()
-                    if cc in COUNTRY_CENTROIDS:
-                        coords = COUNTRY_CENTROIDS[cc]
-                        break
-
-            if not coords:
-                # Skip pulses we can't locate — they'd clutter the globe at 0,0
-                logger.debug("[cyber] Pulse %s has no geo info, skipping", pulse_id)
-                continue
-
-            lat, lon = coords
-            attack_type = self._classify_attack(pulse)
-            severity    = self._pulse_severity(pulse)
-
-            # Pulse metadata
-            author   = pulse.get("author_name") or "Unknown"
-            name     = pulse.get("name") or "Unnamed Threat"
-            tlp      = (pulse.get("tlp") or "WHITE").upper()
-            tags     = pulse.get("tags") or []
-            ioc_count = pulse.get("indicator_count") or len(pulse.get("indicators") or [])
-            adversary = pulse.get("adversary") or ""
-            malware_families = [
-                mf.get("display_name") or mf.get("id", "")
-                for mf in (pulse.get("malware_families") or [])
+        for ioc in ip_iocs[:100]:
+            clean_ip = ioc["_clean_ip"]
+            geo = geo_map.get(clean_ip)
+            
+            if not geo or geo["lat"] is None or geo["lon"] is None:
+                continue # Skip if we can't geocode
+                
+            ioc_id = str(ioc.get("id"))
+            self._seen_ids.add(ioc_id)
+            
+            malware = ioc.get("malware_printable") or "Unknown Malware"
+            threat_type = ioc.get("threat_type_desc") or ioc.get("threat_type") or "Threat"
+            tags = ioc.get("tags") or []
+            severity = self._pulse_severity(malware, threat_type, tags)
+            
+            first_seen = ioc.get("first_seen")
+            if not first_seen:
+                first_seen = datetime.now(timezone.utc).isoformat()
+            elif " UTC" in first_seen:
+                # ThreatFox returns "2020-12-08 13:36:27 UTC"
+                try:
+                    dt = datetime.strptime(first_seen.replace(" UTC", ""), "%Y-%m-%d %H:%M:%S")
+                    first_seen = dt.replace(tzinfo=timezone.utc).isoformat()
+                except ValueError:
+                    first_seen = datetime.now(timezone.utc).isoformat()
+                    
+            event_title = f"{threat_type} — {malware}"
+            if len(event_title) > 60:
+                event_title = event_title[:57] + "..."
+                
+            reporter = ioc.get("reporter") or "Unknown"
+            confidence = ioc.get("confidence_level", 50)
+            
+            desc_parts = [
+                f"Malware: {malware}",
+                f"IOC: {ioc.get('ioc')}",
+                f"Confidence: {confidence}%",
+                f"Location: {geo.get('city', 'Unknown')}, {geo.get('country', 'Unknown')}"
             ]
-            targeted_industries = pulse.get("targeted_countries") or []
-            modified = pulse.get("modified") or datetime.now(timezone.utc).isoformat()
-
-            # Compose description
-            desc_parts = [attack_type]
-            if adversary:
-                desc_parts.append(f"Actor: {adversary}")
-            if malware_families:
-                desc_parts.append(f"Malware: {', '.join(malware_families[:3])}")
-            if ioc_count:
-                desc_parts.append(f"{ioc_count} IOCs")
-            desc_parts.append(f"TLP:{tlp}")
-
-            self._seen_ids.add(pulse_id)
+            
             events.append({
-                "id": f"cyber-otx-{pulse_id}",
+                "id": f"cyber-tf-{ioc_id}",
                 "type": "cyber",
-                "latitude": round(lat, 4),
-                "longitude": round(lon, 4),
+                "latitude": round(geo["lat"], 4),
+                "longitude": round(geo["lon"], 4),
                 "severity": severity,
-                "timestamp": modified,
-                "source": f"AlienVault OTX — {author}",
-                "title": f"{attack_type} — {name[:60]}",
+                "timestamp": first_seen,
+                "source": f"ThreatFox — {reporter}",
+                "title": event_title,
                 "description": " · ".join(desc_parts),
                 "metadata": {
-                    "attack_type": attack_type,
-                    "pulse_name": name,
-                    "pulse_id": pulse_id,
-                    "adversary": adversary,
-                    "tlp": tlp,
-                    "tags": tags[:10],
-                    "ioc_count": ioc_count,
-                    "malware_families": malware_families[:5],
-                    "targeted_industries": targeted_industries[:5],
-                    "author": author,
-                    "otx_url": f"https://otx.alienvault.com/pulse/{pulse_id}",
+                    "attack_type": threat_type,
+                    "malware": malware,
+                    "ioc": ioc.get("ioc"),
+                    "confidence": confidence,
+                    "tags": tags[:5] if isinstance(tags, list) else [],
+                    "reporter": reporter,
+                    "reference": ioc.get("reference"),
+                    "city": geo.get("city"),
+                    "country": geo.get("country")
                 },
             })
-
+            
         # Bound the seen cache
-        if len(self._seen_ids) > 2000:
-            self._seen_ids = set(list(self._seen_ids)[-1000:])
+        if len(self._seen_ids) > 5000:
+            self._seen_ids = set(list(self._seen_ids)[-2000:])
 
-        logger.info("[cyber] OTX returned %d geolocatable threat pulses", len(events))
+        logger.info("[cyber] ThreatFox returned %d geolocatable IOCs", len(events))
         return events

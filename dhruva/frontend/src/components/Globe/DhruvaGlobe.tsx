@@ -40,11 +40,7 @@ const MARKER_DEFS: Record<EventType, { color: string; symbol: string; scale: num
         symbol: '<path d="M8.5 2c0 0-3.5 1.5-3.5 4.5 0 2 1 3.5 1 3.5s.5-1.5 1-2.5c0 0 4.5 1 4.5 5 0 2-1.5 3.5-3.5 3.5-2.5 0-4.5-2-4.5-4.5 0-2 1-3.5 1.5-4-.5.5-1 1.5-1 3 0 0-2 1.5-2 3.5C2 13.5 4.5 16 8 16s6-2.5 6-6c0-4-3-6-5.5-8z" fill="#fff" opacity="0.9" />',
         scale: 1.1,
     },
-    conflict: {
-        color: '#ff0055',
-        symbol: '<path d="M4 12l8-8M12 12L4 4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" /><circle cx="8" cy="8" r="7" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.5" />',
-        scale: 1,
-    },
+
     aircraft: {
         color: '#00bfff',
         symbol: '<path d="M13.5 8c0-.8-.7-1.5-1.5-1.5H9L6 2H4.5l1.5 4.5H3L2 5H1l1 3-1 3h1l1-1.5h3L4.5 14H6l3-4.5h3c.8 0 1.5-.7 1.5-1.5z" fill="#fff" />',
@@ -87,6 +83,11 @@ const MARKER_DEFS: Record<EventType, { color: string; symbol: string; scale: num
     },
     acled: {
         color: '#f97316',
+        symbol: '<path d="M8 1C5.5 1 3.5 3 3.5 5.5c0 3 4.5 9.5 4.5 9.5s4.5-6.5 4.5-9.5C12.5 3 10.5 1 8 1z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="5.5" r="2" fill="#fff" />',
+        scale: 1.1,
+    },
+    acled_cast: {
+        color: '#fbbf24',
         symbol: '<path d="M8 1C5.5 1 3.5 3 3.5 5.5c0 3 4.5 9.5 4.5 9.5s4.5-6.5 4.5-9.5C12.5 3 10.5 1 8 1z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="5.5" r="2" fill="#fff" />',
         scale: 1.1,
     },
@@ -154,11 +155,6 @@ function buildMarkerSvg(type: EventType, severity: number): string {
         `<stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>`,
         `<stop offset="100%" stop-color="${sevColor}" stop-opacity="0.4"/>`,
         `</linearGradient>`,
-
-        // 4. Drop Shadow for the inner vector symbol to make it pop aggressively
-        `<filter id="${shadowId}" x="-20%" y="-20%" width="140%" height="140%">`,
-        `<feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000" flood-opacity="0.9"/>`,
-        `</filter>`,
         `</defs>`,
 
         // Render large blurred halo
@@ -171,8 +167,8 @@ function buildMarkerSvg(type: EventType, severity: number): string {
         `<ellipse cx="32" cy="20" rx="12" ry="5" fill="#ffffff" fill-opacity="0.25"/>`,
         `<ellipse cx="32" cy="17" rx="6" ry="2" fill="#ffffff" fill-opacity="0.4"/>`,
 
-        // Render Symbol with inner drop shadow
-        `<g transform="translate(${symbolOffset}, ${symbolOffset}) scale(${symbolScale})" filter="url(#${shadowId})">`,
+        // Render Symbol
+        `<g transform="translate(${symbolOffset}, ${symbolOffset}) scale(${symbolScale})">`,
         def.symbol,
         `</g>`,
         `</svg>`,
@@ -292,6 +288,9 @@ const DhruvaGlobe: React.FC<DhruvaGlobeProps> = ({ events, enabledLayers, onEven
                 }
             }
         }
+
+        // Debugging trace for zero-render issues
+        console.log(`[DhruvaGlobe] Render cycle: ${result.length} flat events derived from active layers.`);
         return result;
     }, [events, enabledLayers]);
 

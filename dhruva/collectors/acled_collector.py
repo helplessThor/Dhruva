@@ -18,7 +18,7 @@ logger = logging.getLogger("dhruva.collector")
 ACLED_API_URL = "https://api.acleddata.com/acled/read"
 
 # Freshness window
-FRESHNESS_WINDOW_DAYS = 30
+FRESHNESS_WINDOW_DAYS = 60
 
 # Load credentials
 try:
@@ -37,7 +37,7 @@ class ACLEDCollector(BaseCollector):
         {"acled_email": "YOUR_EMAIL", "acled_password": "YOUR_PASSWORD"}
     """
 
-    MAX_EVENTS = 200
+    MAX_EVENTS = 2000
 
     # ACLED event type to severity mapping
     SEVERITY_MAP = {

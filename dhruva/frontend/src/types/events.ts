@@ -15,7 +15,6 @@ export interface OsintEvent {
 export type EventType =
     | 'earthquake'
     | 'fire'
-    | 'conflict'
     | 'aircraft'
     | 'marine'
     | 'cyber'
@@ -25,6 +24,7 @@ export type EventType =
     | 'military_aircraft'
     | 'ucdp'
     | 'acled'
+    | 'acled_cast'
     | 'naval'
     | 'intel_hotspot';
 
@@ -66,7 +66,6 @@ export const SEVERITY_COLORS: Record<number, string> = {
 export const LAYER_CONFIGS: LayerConfig[] = [
     { id: 'earthquake', label: 'Earthquakes', icon: 'earthquake', color: '#ff6600', enabled: true },
     { id: 'fire', label: 'Active Fires', icon: 'fire', color: '#ff2d20', enabled: false },
-    { id: 'conflict', label: 'Conflicts', icon: 'conflict', color: '#ff0055', enabled: true },
     { id: 'aircraft', label: 'Aircraft', icon: 'aircraft', color: '#00bfff', enabled: false },
     { id: 'marine', label: 'Marine', icon: 'marine', color: '#0077cc', enabled: false },
     { id: 'cyber', label: 'Cyber Attacks', icon: 'cyber', color: '#9333ea', enabled: false },
@@ -74,8 +73,9 @@ export const LAYER_CONFIGS: LayerConfig[] = [
     { id: 'economic', label: 'Economic', icon: 'economic', color: '#10b981', enabled: false },
     { id: 'military', label: 'Military Zones', icon: 'military', color: '#4ade80', enabled: false },
     { id: 'military_aircraft', label: 'Military Aircraft', icon: 'military_aircraft', color: '#a3e635', enabled: true },
-    { id: 'ucdp', label: 'UCDP Conflicts', icon: 'ucdp', color: '#e11d48', enabled: true },
+    { id: 'ucdp', label: 'UCDP (Conflicts)', icon: 'ucdp', color: '#e11d48', enabled: true },
     { id: 'acled', label: 'ACLED Events', icon: 'acled', color: '#f97316', enabled: true },
+    { id: 'acled_cast', label: 'Predicted Conflict Alert', icon: 'acled', color: '#fbbf24', enabled: true },
     { id: 'naval', label: 'Naval Deployments', icon: 'marine', color: '#3b82f6', enabled: true },
     { id: 'intel_hotspot', label: 'Intel Hotspots', icon: 'intel_hotspot', color: '#fbbf24', enabled: true },
 ];

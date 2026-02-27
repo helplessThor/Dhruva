@@ -19,8 +19,11 @@ class EventType(str, Enum):
     ECONOMIC = "economic"
     MILITARY = "military"
     MILITARY_AIRCRAFT = "military_aircraft"
+    MILITARY_MARINE = "military_marine"
     UCDP = "ucdp"
     ACLED = "acled"
+    ACLED_CAST = "acled_cast"
+    NAVAL = "naval"
     INTEL_HOTSPOT = "intel_hotspot"
 
 
@@ -70,6 +73,8 @@ class LayerState(BaseModel):
     military_aircraft: bool = True
     ucdp: bool = True
     acled: bool = True
+    acled_cast: bool = True
+    naval: bool = True
     intel_hotspot: bool = True
 
 

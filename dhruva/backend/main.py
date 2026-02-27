@@ -37,6 +37,7 @@ from collectors.economic_collector import EconomicCollector
 from collectors.military_activity_collector import MilitaryActivityCollector, infer_military_aircraft
 from collectors.ucdp_collector import UCDPCollector
 from collectors.acled_collector import ACLEDCollector
+from collectors.acled_cast_collector import ACLEDCastCollector
 from collectors.naval_collector import NavalCollector
 
 # ─── Logging ───────────────────────────────────────
@@ -59,7 +60,6 @@ ws_manager = ConnectionManager()
 event_store: dict[str, list[dict]] = {
     "earthquake": [],
     "fire": [],
-    "conflict": [],
     "aircraft": [],
     "marine": [],
     "military_marine": [],
@@ -70,6 +70,7 @@ event_store: dict[str, list[dict]] = {
     "military_aircraft": [],
     "ucdp": [],
     "acled": [],
+    "acled_cast": [],
     "naval": [],
     "protest": [],
     "gdelt_conflict": [],
@@ -98,12 +99,13 @@ collectors = [
     MilitaryActivityCollector(interval=settings.military_interval),
     UCDPCollector(interval=settings.ucdp_interval),
     ACLEDCollector(interval=settings.acled_interval),
+    ACLEDCastCollector(interval=21600),  # Fetch every 6 hours
     NavalCollector(interval=settings.naval_interval),
 ]
 
 # Layer types that trigger hotspot / convergence recompute
 HOTSPOT_TRIGGER_LAYERS = {
-    "military", "ucdp", "acled", "conflict",
+    "military", "ucdp", "acled", "acled_cast",
     "earthquake", "fire", "protest", "gdelt_conflict",
     "military_marine", "cyber", "outage",
 }
@@ -227,18 +229,12 @@ async def run_collector(collector):
             })
             continue  # Skip generic processing below for marine
 
-        # ── ACLED: merge into main conflict layer ────────────────────
+        # ── ACLED: broadcast on native layer ────────────────────
         if etype == "acled":
             normalized_acled = normalize_batch(events)
             
-            # Store in both the raw 'acled' layer and the generic 'conflict' layer
             event_store["acled"] = normalized_acled
             data_freshness["acled"] = datetime.now(timezone.utc).isoformat()
-            
-            # Overwrite the empty conflict layer with the rich ACLED data
-            # NOTE: We merge UCDP and Naval into this later if they run
-            event_store["conflict"] = normalized_acled
-            data_freshness["conflict"] = datetime.now(timezone.utc).isoformat()
             
             # Recalculate risk
             all_events = []
@@ -253,14 +249,8 @@ async def run_collector(collector):
                 "data": normalized_acled,
                 "risk": current_risk,
             })
-            await ws_manager.broadcast({
-                "action": "event_batch",
-                "layer": "conflict",
-                "data": event_store["conflict"],
-                "risk": current_risk,
-            })
             
-            # Recompute fusion since conflict data just arrived
+            # Recompute fusion since acled data just arrived
             _recompute_fusion()
             await ws_manager.broadcast({
                 "action": "event_batch",
@@ -270,21 +260,43 @@ async def run_collector(collector):
             })
             continue  # Skip generic processing
             
-        # ── Naval & UCDP Scrapers: Merge into main conflict layer ────
+        # ── ACLED CAST: handle predictive alerts ─────────────────────
+        if etype == "acled_cast":
+            normalized_cast = normalize_batch(events)
+            
+            event_store["acled_cast"] = normalized_cast
+            data_freshness["acled_cast"] = datetime.now(timezone.utc).isoformat()
+            
+            # Recalculate risk
+            all_events = []
+            for ev_list in event_store.values():
+                if isinstance(ev_list, list):
+                    all_events.extend(ev_list)
+            current_risk = calculate_risk(all_events)
+
+            await ws_manager.broadcast({
+                "action": "event_batch",
+                "layer": "acled_cast",
+                "data": normalized_cast,
+                "risk": current_risk,
+            })
+            
+            # Trigger hotspot recomputation
+            _recompute_fusion()
+            await ws_manager.broadcast({
+                "action": "event_batch",
+                "layer": "intel_hotspot",
+                "data": event_store.get("intel_hotspot", []),
+                "risk": current_risk,
+            })
+            continue
+            
+        # ── Naval & UCDP Scrapers: Broadcast on native layer ────
         if etype in ["ucdp", "naval"]:
             normalized_osint = normalize_batch(events)
             
             event_store[etype] = normalized_osint
             data_freshness[etype] = datetime.now(timezone.utc).isoformat()
-            
-            # Append to conflict layer
-            if "conflict" not in event_store:
-                event_store["conflict"] = []
-            
-            # Remove old OSINT of the same type to prevent infinite growth before appending new
-            event_store["conflict"] = [e for e in event_store["conflict"] if e.get("type") != etype]
-            event_store["conflict"].extend(normalized_osint)
-            data_freshness["conflict"] = datetime.now(timezone.utc).isoformat()
             
             # Recalculate risk
             all_events = []
@@ -297,12 +309,6 @@ async def run_collector(collector):
                 "action": "event_batch",
                 "layer": etype,
                 "data": normalized_osint,
-                "risk": current_risk,
-            })
-            await ws_manager.broadcast({
-                "action": "event_batch",
-                "layer": "conflict",
-                "data": event_store["conflict"],
                 "risk": current_risk,
             })
             

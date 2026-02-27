@@ -42,6 +42,8 @@ export function useWebSocket(): UseWebSocketReturn {
                     const msg: WebSocketMessage = JSON.parse(e.data);
 
                     if (msg.action === 'initial_state') {
+                        console.log(`[Dhruva WS] Received initial_state. Data type: ${Array.isArray(msg.data) ? 'Array' : typeof msg.data}`);
+                        console.log(msg.data);
                         const grouped: Record<string, OsintEvent[]> = {};
                         for (const event of msg.data) {
                             if (!grouped[event.type]) grouped[event.type] = [];
