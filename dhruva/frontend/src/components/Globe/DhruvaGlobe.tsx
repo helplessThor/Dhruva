@@ -106,6 +106,11 @@ const MARKER_DEFS: Record<EventType, { color: string; symbol: string; scale: num
         symbol: '<path d="M2 8c0 0 3-4 6-4s6 4 6 4-3 4-6 4-6-4-6-4z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="8" r="2.5" fill="#fff" /><path d="M8 2v1M8 13v1M2 8H1M15 8h-1" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.4" stroke-linecap="round" />',
         scale: 1,
     },
+    convergence: {
+        color: '#dc2626',
+        symbol: '<path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3M4 4l1.5 1.5M12 12l-1.5-1.5M12 4L10.5 5.5M4 12l1.5-1.5" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" /><circle cx="8" cy="8" r="2" fill="#fff" />',
+        scale: 1.2,
+    },
     satellite: {
         color: '#cbd5e1',
         symbol: '<ellipse cx="8" cy="8" rx="6" ry="2" fill="none" stroke="#fff" stroke-width="1.5" transform="rotate(-30 8 8)" /><circle cx="8" cy="8" r="3" fill="#fff" />',

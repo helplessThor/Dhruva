@@ -107,12 +107,27 @@ const ICON_PATHS: Record<EventType, (c: string) => React.ReactNode> = {
             <path d="M1 12c2 1 4-1 6 0s4 1 6 0 2-1 2-1" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" />
         </>
     ),
+    // Military Marine: marine icon duplicate
+    military_marine: (c) => (
+        <>
+            <path d="M2 10l1-5h8l2 5z" fill={c} opacity="0.8" />
+            <path d="M4 5V3h4v2" fill="none" stroke={c} strokeWidth="1.5" />
+            <path d="M1 12c2 1 4-1 6 0s4 1 6 0 2-1 2-1" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" />
+        </>
+    ),
     // Intel Hotspot: glowing radar blip or scanning eye
     intel_hotspot: (c) => (
         <>
             <path d="M2 8c0 0 3-4 6-4s6 4 6 4-3 4-6 4-6-4-6-4z" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round" />
             <circle cx="8" cy="8" r="2.5" fill={c} />
             <path d="M8 2v1M8 13v1M2 8H1M15 8h-1" fill="none" stroke={c} strokeWidth="1.5" opacity="0.4" strokeLinecap="round" />
+        </>
+    ),
+    // Convergence: multi-vector radar crosshair
+    convergence: (c) => (
+        <>
+            <path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3M4 4l1.5 1.5M12 12l-1.5-1.5M12 4L10.5 5.5M4 12l1.5-1.5" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="8" cy="8" r="2" fill={c} />
         </>
     ),
     // Satellite: An orbital ring with a central orb
