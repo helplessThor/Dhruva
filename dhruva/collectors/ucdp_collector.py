@@ -26,7 +26,7 @@ CONFLICT_KEYWORDS = [
     "war", "open-war", "declared war", "retaliate", "air strike", "surgical strike",
     "insurgency", "insurgent attack", "militia clash", "guerrilla attack", "ambush",
     "rocket attack", "missile strike", "mass casualty", "civil war", "invasion",
-    "bombing", "suicide bombing", "ied explosion", "car bomb",
+    "bombing", "suicide bombing", "ied explosion", "car bomb", "explosion",
     
     # Unrest & Protest
     "protest", "violent protest", "non-violent protest", "political violence",
@@ -246,8 +246,13 @@ class UCDPCollector(BaseCollector):
                     if resp.status_code != 200:
                         continue
                     
-                    # Parse XML
-                    root = ET.fromstring(resp.text)
+                    # Parse XML gracefully
+                    try:
+                        root = ET.fromstring(resp.text)
+                    except ET.ParseError:
+                        logger.debug("[ucdp] Failed to parse XML from %s, skipping.", url)
+                        continue
+                        
                     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=self.FRESHNESS_HOURS)
                     
                     for item in root.findall(".//item"):

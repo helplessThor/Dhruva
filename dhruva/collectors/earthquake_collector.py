@@ -172,11 +172,16 @@ class EarthquakeCollector(BaseCollector):
                     if resp.status_code != 200:
                         continue
                 
-                # Parse XML
-                root = ET.fromstring(resp.text)
-                cutoff_time = datetime.now(timezone.utc) - timedelta(hours=self.FRESHNESS_HOURS)
-                
-                for item in root.findall(".//item"):
+                    # Parse XML gracefully
+                    try:
+                        root = ET.fromstring(resp.text)
+                    except ET.ParseError:
+                        logger.debug("[earthquake] Failed to parse XML from %s, skipping.", url)
+                        continue
+                        
+                    cutoff_time = datetime.now(timezone.utc) - timedelta(hours=self.FRESHNESS_HOURS)
+                    
+                    for item in root.findall(".//item"):
                     try:
                         title = item.findtext("title") or ""
                         link = item.findtext("link") or ""
