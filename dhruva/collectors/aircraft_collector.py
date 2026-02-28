@@ -231,29 +231,32 @@ class AircraftCollector(BaseCollector):
     AEROAPI_BASE = "https://aeroapi.flightaware.com/aeroapi"
     OPENSKY_URL = "https://opensky-network.org/api/states/all"
 
-    MAX_AIRCRAFT = 1000       # Cap per-source per-region
+    MAX_AIRCRAFT = 5000       # Cap per-source per-region
     COLLECTION_INTERVAL = 30  # seconds between collections
 
-    # Global Grid (lat_min, lat_max, lon_min, lon_max, label)
-    # Divided into 12 interlocking bands covering 100% of the Earth (-90 to +90 lat, -180 to +180 lon)
+    # Search regions for optimized continental coverage (lat_min, lat_max, lon_min, lon_max, label)
+    # Using targeted "sniper boxes" prevents APIs from silently truncating massive oceanic bounding boxes.
     SEARCH_REGIONS = [
-        # ── Northern Hemisphere ──
-        ( 45,  90, -180,  -90, "Arctic / North America West"),
-        ( 45,  90,  -90,    0, "Arctic / North America East"),
-        ( 45,  90,    0,   90, "Arctic / Europe & Russia West"),
-        ( 45,  90,   90,  180, "Arctic / Russia East & Pacific"),
+        # ── High-Density Continental Core ──
+        ( 25,  50, -125,  -70, "North America"),
+        ( 35,  60,  -10,   30, "Europe Core"),
+        ( 10,  35,   70,   95, "South Asia / India"),
+        ( 20,  45,  100,  145, "East Asia / China / Japan"),
         
-        # ── Equatorial & Mid-Latitudes ──
-        (  0,  45, -180,  -90, "Pacific / Central America"),
-        (  0,  45,  -90,    0, "Atlantic / Caribbean / West Africa"),
-        (  0,  45,    0,   90, "Africa / Middle East / South Asia"),
-        (  0,  45,   90,  180, "Southeast Asia / West Pacific"),
+        # ── The User-Requested Gaps ──
+        ( 45,  70,   30,   90, "Western Russia / Urals"),     # Added specific Russian coverage
+        ( 45,  70,   90,  180, "Eastern Russia / Siberia"),   # Splitting Russia into 2 boxes prevents truncation
+        ( 10,  35,   35,   65, "Middle East / Gulf"),         # Refined Middle East box
+        (-35,   5,   10,   50, "Central & South Africa"),     # Split Africa to dive deeper
+        (  5,  35,  -20,   35, "North Africa / Sahara"),      # North Africa specific
+        (-55,  15,  -80,  -35, "South America Core"),         # South America
         
-        # ── Southern Hemisphere ──
-        (-90,   0, -180,  -90, "South Pacific"),
-        (-90,   0,  -90,    0, "South America / South Atlantic"),
-        (-90,   0,    0,   90, "South Africa / Indian Ocean"),
-        (-90,   0,   90,  180, "Australia / Oceania / Southern Ocean"),
+        # ── Extended Peripheral Zones ──
+        ( -5,  25,   95,  140, "Southeast Asia"),
+        (-15,  30,  -90,  -55, "Central America / Caribbean"),
+        (-45, -10,  110,  155, "Australia"),
+        (-45,   0,  155,  180, "New Zealand / Oceania"),
+        ( 50,  70, -165, -130, "Alaska / Bering Sea"),
     ]
 
     def __init__(self, interval: int = 30):
