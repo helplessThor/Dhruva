@@ -182,45 +182,45 @@ class EarthquakeCollector(BaseCollector):
                     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=self.FRESHNESS_HOURS)
                     
                     for item in root.findall(".//item"):
-                    try:
-                        title = item.findtext("title") or ""
-                        link = item.findtext("link") or ""
-                        pub_date_str = item.findtext("pubDate") or ""
-                        
-                        if not pub_date_str:
-                            continue
+                        try:
+                            title = item.findtext("title") or ""
+                            link = item.findtext("link") or ""
+                            pub_date_str = item.findtext("pubDate") or ""
                             
-                        pub_date = parsedate_to_datetime(pub_date_str)
-                        if pub_date.tzinfo is None:
-                            pub_date = pub_date.replace(tzinfo=timezone.utc)
+                            if not pub_date_str:
+                                continue
+                                
+                            pub_date = parsedate_to_datetime(pub_date_str)
+                            if pub_date.tzinfo is None:
+                                pub_date = pub_date.replace(tzinfo=timezone.utc)
+                                
+                            if pub_date < cutoff_time:
+                                continue  # Too old
+                                
+                            # Quick Keyword validation
+                            title_lower = title.lower()
+                            if not any(kw.replace("\"", "") in title_lower for kw in EARTHQUAKE_KEYWORDS):
+                                continue
+                                
+                            # Extract hint
+                            lat, lon, loc_name, mag = self._extract_earthquake_coords(title_lower)
                             
-                        if pub_date < cutoff_time:
-                            continue  # Too old
+                            if loc_name not in events_by_region:
+                                events_by_region[loc_name] = {
+                                    "lat": lat,
+                                    "lon": lon,
+                                    "mag": mag,
+                                    "latest_time": pub_date,
+                                    "titles": [],
+                                    "links": set() 
+                                }
                             
-                        # Quick Keyword validation
-                        title_lower = title.lower()
-                        if not any(kw.replace("\"", "") in title_lower for kw in EARTHQUAKE_KEYWORDS):
-                            continue
+                            if pub_date > events_by_region[loc_name]["latest_time"]:
+                                events_by_region[loc_name]["latest_time"] = pub_date
+                                
+                            events_by_region[loc_name]["titles"].append(title)
+                            events_by_region[loc_name]["links"].add(link)
                             
-                        # Extract hint
-                        lat, lon, loc_name, mag = self._extract_earthquake_coords(title_lower)
-                        
-                        if loc_name not in events_by_region:
-                            events_by_region[loc_name] = {
-                                "lat": lat,
-                                "lon": lon,
-                                "mag": mag,
-                                "latest_time": pub_date,
-                                "titles": [],
-                                "links": set() 
-                            }
-                        
-                        if pub_date > events_by_region[loc_name]["latest_time"]:
-                            events_by_region[loc_name]["latest_time"] = pub_date
-                            
-                        events_by_region[loc_name]["titles"].append(title)
-                        events_by_region[loc_name]["links"].add(link)
-                        
                         except Exception as e:
                             logger.debug("[earthquake] Failed to parse RSS item: %s", e)
                             
