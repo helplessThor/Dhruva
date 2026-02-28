@@ -19,16 +19,33 @@ logger = logging.getLogger("dhruva.collector")
 
 # High-conviction keywords for Conflict and Protest events
 CONFLICT_KEYWORDS = [
+    # General Combat
     "rebel clash", "military strike", "armed conflict", "terrorist attack",
     "gunfight", "artillery strike", "drone strike", "troops open fire",
     "border clash", "skirmish", "cross-border fire", "exchange fire",
+    "war", "open-war", "declared war", "retaliate", "air strike", "surgical strike",
+    "insurgency", "insurgent attack", "militia clash", "guerrilla attack", "ambush",
+    "rocket attack", "missile strike", "mass casualty", "civil war", "invasion",
+    "bombing", "suicide bombing", "ied explosion", "car bomb",
+    
+    # Unrest & Protest
     "protest", "violent protest", "non-violent protest", "political violence",
-    "civil unrest", "riot", "demonstration", "war", "open-war", "declared war", "retaliate",
-    "air strike", "surgical strike", "riots"
+    "civil unrest", "riot", "demonstration", "riots", "coup", "military coup", 
+    "mutiny", "uprising", "rebellion", "revolution", "police clash", "tear gas",
+    
+    # Specific Hotspots & Regional Terms
+    "pak afghan border", "pakistan army clash", "afghan border clash", "ttp attack",
+    "line of control", "loc firing", "cross loc", "ceasefire violation", 
+    "gaza strike", "idf strike", "hamas rocket", "hezbollah rocket", "lebanon strike",
+    "ukraine drone", "russian strike", "kyiv attack", "moscow drone",
+    "myanmar junta drill", "rsf clash", "houthi rebel", "red sea ship attack",
+    "cartel clash", "gang violence", "narco shootout", "gun battle",
 ]
 
 RSS_FEEDS = [
     "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en",
+    "https://www.bing.com/news/search?q={query}&format=rss",
+    "https://news.search.yahoo.com/rss?p={query}",
 ]
 
 class UCDPCollector(BaseCollector):
@@ -196,71 +213,85 @@ class UCDPCollector(BaseCollector):
     async def _scrape_osint_rss(self) -> list[dict]:
         events = []
         
-        # Build the boolean query
-        query_str = "(" + " OR ".join(f'"{kw}"' for kw in CONFLICT_KEYWORDS) + f") when:{self.FRESHNESS_HOURS}h"
-        encoded_query = urllib.parse.quote(query_str)
-        
         # Aggregate news items by region to cross-verify and prevent Rate Limiting
         events_by_region = {}
+        
+        # Chunk keywords to prevent 414 URI Too Long errors across 3 search engines
+        chunk_size = 12
+        keyword_chunks = [CONFLICT_KEYWORDS[i:i + chunk_size] for i in range(0, len(CONFLICT_KEYWORDS), chunk_size)]
+
+        if not self._http_client:
+            import httpx
+            # Use a generic User-Agent to bypass simple blocks from Bing/Yahoo
+            self._http_client = httpx.AsyncClient(
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                timeout=20.0
+            )
 
         for base_feed in RSS_FEEDS:
-            url = base_feed.format(query=encoded_query)
-            try:
-                if not self._http_client:
-                    import httpx
-                    self._http_client = httpx.AsyncClient(timeout=30.0)
+            for chunk in keyword_chunks:
+                # Google News strictly supports the 'when:XXh' operator
+                query_str = " OR ".join(f'"{kw}"' for kw in chunk)
+                if "news.google.com" in base_feed:
+                    query_str += f" when:{self.FRESHNESS_HOURS}h"
                     
-                resp = await self._http_client.get(url, timeout=30.0)
-                resp.raise_for_status()
+                encoded_query = urllib.parse.quote(query_str)
+                url = base_feed.format(query=encoded_query)
                 
-                # Parse XML
-                root = ET.fromstring(resp.text)
-                cutoff_time = datetime.now(timezone.utc) - timedelta(hours=self.FRESHNESS_HOURS)
-                
-                for item in root.findall(".//item"):
-                    try:
-                        title = item.findtext("title") or ""
-                        link = item.findtext("link") or ""
-                        pub_date_str = item.findtext("pubDate") or ""
-                        
-                        if not pub_date_str:
-                            continue
+                try:
+                    resp = await self._http_client.get(url)
+                    # We might get 403 or 429 from Yahoo/Bing, just handle it gracefully
+                    if resp.status_code != 200:
+                        continue
+                    
+                    # Parse XML
+                    root = ET.fromstring(resp.text)
+                    cutoff_time = datetime.now(timezone.utc) - timedelta(hours=self.FRESHNESS_HOURS)
+                    
+                    for item in root.findall(".//item"):
+                        try:
+                            title = item.findtext("title") or ""
+                            link = item.findtext("link") or ""
+                            pub_date_str = item.findtext("pubDate") or ""
                             
-                        pub_date = parsedate_to_datetime(pub_date_str)
-                        if pub_date.tzinfo is None:
-                            pub_date = pub_date.replace(tzinfo=timezone.utc)
+                            if not pub_date_str:
+                                continue
+                                
+                            pub_date = parsedate_to_datetime(pub_date_str)
+                            if pub_date.tzinfo is None:
+                                pub_date = pub_date.replace(tzinfo=timezone.utc)
+                                
+                            if pub_date < cutoff_time:
+                                continue  # Too old
+                                
+                            # Quick Keyword validation
+                            title_lower = title.lower()
+                            # Extract basic location hint via NER-lite approach
+                            lat, lon, country = self._extract_conflict_coords(title_lower)
+                                
+                            # Group by country/region to cross-verify
+                            if country not in events_by_region:
+                                events_by_region[country] = {
+                                    "lat": lat,
+                                    "lon": lon,
+                                    "latest_time": pub_date,
+                                    "titles": [],
+                                    "links": set() 
+                                }
                             
-                        if pub_date < cutoff_time:
-                            continue  # Too old
+                            # Update latest time
+                            if pub_date > events_by_region[country]["latest_time"]:
+                                events_by_region[country]["latest_time"] = pub_date
+                                
+                            events_by_region[country]["titles"].append(title)
+                            events_by_region[country]["links"].add(link)
                             
-                        # Quick Keyword validation
-                        title_lower = title.lower()
-                        # Extract basic location hint via NER-lite approach
-                        lat, lon, country = self._extract_conflict_coords(title_lower)
+                        except Exception as e:
+                            logger.debug("[ucdp] Failed to parse RSS item: %s", e)
                             
-                        # Group by country/region to cross-verify
-                        if country not in events_by_region:
-                            events_by_region[country] = {
-                                "lat": lat,
-                                "lon": lon,
-                                "latest_time": pub_date,
-                                "titles": [],
-                                "links": set() 
-                            }
-                        
-                        # Update latest time
-                        if pub_date > events_by_region[country]["latest_time"]:
-                            events_by_region[country]["latest_time"] = pub_date
-                            
-                        events_by_region[country]["titles"].append(title)
-                        events_by_region[country]["links"].add(link)
-                        
-                    except Exception as e:
-                        logger.debug("[ucdp] Failed to parse RSS item: %s", e)
-                        
-            except Exception as e:
-                logger.error("[ucdp] Failed to scrape RSS feed: %s", e)
-                
+                except Exception as e:
+                    logger.debug("[ucdp] Failed to scrape RSS feed chunk: %s", e)
+                    
         # Now pass grouped snippets to Groq AI for intelligent extraction
         osint_results = []
         for country, data in events_by_region.items():
