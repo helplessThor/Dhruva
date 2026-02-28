@@ -1,8 +1,9 @@
 # Dhruva — OSINT Global Situational Awareness Dashboard
 
-**Palantir-style intelligence dashboard** visualizing real-time OSINT data on an interactive 3D globe with a dark military theme.
+**Palantir-style intelligence dashboard** visualizing real-time OSINT data on an interactive 3D globe with a dark military theme. Dhruva merges official institutional APIs with dynamic AI-verified OSINT scrapers to detect global events, multi-domain intelligence hotspots, and geographic convergence.
 
 ![Architecture](https://img.shields.io/badge/Architecture-FastAPI%20+%20React%20+%20CesiumJS-blue)
+![AI Verification](https://img.shields.io/badge/OSINT-Groq%20LLM%20Verification-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
@@ -12,7 +13,7 @@
 ### Prerequisites
 - **Python 3.11+**
 - **Node.js 18+** / npm
-- Redis *(optional — app works without it)*
+- Redis *(optional — app works natively with in-memory fallback)*
 
 ### 1. Backend
 
@@ -47,81 +48,84 @@ npm run dev
 
 Frontend runs at **http://localhost:5173**
 
-### 3. Environment Variables (Optional)
+### 3. Environment Variables (Optional but Recommended)
 
-Create `dhruva/backend/.env`:
+Create `dhruva/backend/.env` for external API and AI integration:
 
 ```env
 DHRUVA_USE_REDIS=false
-DHRUVA_CESIUM_ION_TOKEN=your_cesium_ion_token
-DHRUVA_ACLED_API_KEY=your_acled_key
+DHRUVA_GROQ_API_KEY=your_groq_api_key                # OSINT Text scraping & verification
+DHRUVA_ACLED_API_KEY=your_acled_key                  # ACLED Conflict Data
+DHRUVA_ACLED_EMAIL=your_email                        # ACLED Email
+DHRUVA_UCDP_API_TOKEN=your_ucdp_token                # UCDP Conflict Data
+DHRUVA_FLIGHTAWARE_API_KEY=your_flightaware_key      # Aircraft & Military Flight Tracking
+DHRUVA_POSITION_API_TOKEN=your_marine_token          # Marine / Navy Tracking
+DHRUVA_N2YO_API_KEY=your_n2yo_key                    # Live Satellite Tracking
 ```
 
 Create `dhruva/frontend/.env`:
 
 ```env
-VITE_CESIUM_ION_TOKEN=your_cesium_ion_token
+VITE_CESIUM_ION_TOKEN=your_cesium_ion_token          # 3D Globe Rendering
 ```
 
 ---
 
 ## Architecture
 
+Dhruva utilizes a decoupled architecture where Python Async Collectors constantly pull data from 15+ sources. Official API data is then automatically merged with OSINT news scraping verified by an intelligent Groq LLM fallback cycle.
+
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    DHRUVA ARCHITECTURE                    │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌─────────────┐    ┌─────────────┐    ┌──────────────┐ │
-│  │ Earthquake   │    │ Fire        │    │ Conflict     │ │
-│  │ (USGS)       │    │ (NASA FIRMS)│    │ (ACLED)      │ │
-│  └──────┬───────┘    └──────┬──────┘    └──────┬───────┘ │
-│         │                   │                   │        │
-│         ▼                   ▼                   ▼        │
-│  ┌──────────────────────────────────────────────────┐    │
-│  │           Fusion Engine (Normalizer)              │    │
-│  │           Risk Calculator (DEFCON)                │    │
-│  └──────────────────────┬───────────────────────────┘    │
-│                         │                                │
-│                         ▼                                │
-│  ┌──────────────────────────────────────────────────┐    │
-│  │     Redis Streams / In-Memory Fallback            │    │
-│  └──────────────────────┬───────────────────────────┘    │
-│                         │                                │
-│              ┌──────────┴──────────┐                     │
-│              │                     │                     │
-│              ▼                     ▼                     │
-│  ┌───────────────────┐  ┌─────────────────┐             │
-│  │  REST API (HTTP)   │  │  WebSocket (WS)  │             │
-│  │  /api/events       │  │  /ws              │             │
-│  └───────────────────┘  └─────────────────┘             │
-│              │                     │                     │
-│              └──────────┬──────────┘                     │
-│                         │                                │
-│                         ▼                                │
-│  ┌──────────────────────────────────────────────────┐    │
-│  │          React + TypeScript + CesiumJS            │    │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────────────┐  │    │
-│  │  │ 3D Globe │ │ Sidebar  │ │ DEFCON Indicator │  │    │
-│  │  └──────────┘ └──────────┘ └──────────────────┘  │    │
-│  └──────────────────────────────────────────────────┘    │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                        DHRUVA ARCHITECTURE                           │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌────────────┐  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐  │
+│  │ Earthquake │  │ Marine/Navy │  │ Satellites   │  │ UCDP/ACLED  │  │
+│  │ (USGS+OSINT)  │ (OpenSeaAPI)│  │ (N2YO API)   │  │ (APIs+OSINT)│  │
+│  └──────┬─────┘  └──────┬──────┘  └──────┬───────┘  └──────┬──────┘  │
+│         │               │                │                 │         │
+│         ▼               ▼                ▼                 ▼         │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │                 Fusion Engine (Normalizer)                     │  │
+│  │    LLM Deduplication, OSINT Verification & Geocoding Fallback  │  │
+│  └──────────────────────────────┬─────────────────────────────────┘  │
+│                                 ▼                                    │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │            Intel Hotspot & Convergence Calculator              │  │
+│  └──────────────────────────────┬─────────────────────────────────┘  │
+│                                 ▼                                    │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │                 REST API (HTTP) / WebSocket (WS)               │  │
+│  └──────────────────────────────┬─────────────────────────────────┘  │
+│                                 ▼                                    │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │                  React + TypeScript + CesiumJS                 │  │
+│  │        (3D Globe | Active Sidebar | DEFCON Risk Dashboard)     │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Data Layers
+## Data Layers & Collectors
 
-| Layer | Source | Data Type | Update Interval |
-|-------|--------|-----------|----------------|
-| 🌍 Earthquakes | USGS GeoJSON | Real-time | 60s |
-| 🔥 Active Fires | NASA FIRMS | Simulated | 120s |
-| ⚔️ Conflicts | ACLED/UCDP | Simulated | 300s |
-| ✈️ Aircraft | OpenSky Network | Real + Fallback | 15s |
-| 🚢 Marine Traffic | AIS | Simulated | 30s |
-| 💻 Cyber Attacks | OSINT-TI | Simulated | 60s |
-| 📡 Internet Outages | NetBlocks | Simulated | 120s |
-| 📈 Economic Indices | Market Data | Simulated | 300s |
+Dhruva boasts 15 highly tuned tracking layers. OSINT scraping feeds intelligently overlap against official reporting.
+
+| Layer | Source Engine | Data Integration |
+|-------|--------------|------------------|
+| 🌍 **Earthquakes** | USGS GeoJSON + Google RSS | Official API merged with AI-verified breaking OSINT |
+| ⚔️ **UCDP Conflicts**| UCDP Official API + RSS | Military clashes and casualties verified via LLM deduplication |
+| 🛡 **ACLED & CAST**| ACLED / CAST Datasets | Predictive Heatmaps & Real-time alert vectors |
+| ✈️ **Aircraft** | OpenSky / FlightAware | Dedicated High-Value Military Aircraft sorting and 3D rotation |
+| 🚢 **Marine / Naval** | PositionAPI / AIS | Dedicated High-Value Military, Carrier, & Oil Tanker visibility |
+| 📡 **Outages** | IODA + nominatim OSM | Global tracking with intelligent dynamic OpenStreetMap geocoder |
+| 💻 **Cyber Attacks**| OSINT-TI | Real-time tracking of DDOS and network infiltration operations |
+| 🔥 **Active Fires** | NASA FIRMS | Forest fires & heat-anomalies |
+| 🛰 **Satellites** | N2YO API | Tracks all 57 orbit categories with automated rate-limit recovery |
+| 📈 **Economic** | Yahoo Finance / RSS | Market instability & critical commodity alerts |
+| 🎯 **Hotspots** | Fusion Engine | Spatial algorithm detecting heavy volume in a 1°×1° grid |
+| 🚨 **Convergence** | Fusion Engine | **Multi-Domain Intelligence** (Detects when 3+ different alert types happen in the exact same location) |
 
 ---
 
@@ -130,55 +134,11 @@ VITE_CESIUM_ION_TOKEN=your_cesium_ion_token
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/` | Server status |
-| GET | `/api/events` | All events across layers |
+| GET | `/api/events` | All events across active layers |
 | GET | `/api/events/{layer}` | Events for specific layer |
-| GET | `/api/risk` | Current DEFCON risk level |
-| GET | `/api/layers` | Available layers + counts |
-| WS | `/ws` | Real-time event stream |
-
----
-
-## Project Structure
-
-```
-dhruva/
-├── backend/
-│   ├── main.py              # FastAPI application
-│   ├── config.py            # Environment-based settings
-│   ├── models.py            # Pydantic schemas
-│   ├── redis_manager.py     # Redis/in-memory stream
-│   ├── websocket_manager.py # WS connection manager
-│   └── requirements.txt
-├── collectors/
-│   ├── base_collector.py    # Abstract base class
-│   ├── earthquake_collector.py  # ← Real USGS data
-│   ├── fire_collector.py
-│   ├── conflict_collector.py
-│   ├── aircraft_collector.py    # ← Real OpenSky data
-│   ├── marine_collector.py
-│   ├── cyber_collector.py
-│   ├── outage_collector.py
-│   └── economic_collector.py
-├── fusion_engine/
-│   ├── normalizer.py        # Event validation
-│   └── risk_calculator.py   # DEFCON risk scoring
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx
-│   │   ├── components/
-│   │   │   ├── Globe/DhruvaGlobe.tsx
-│   │   │   ├── Sidebar/EventSidebar.tsx
-│   │   │   ├── Controls/LayerToggles.tsx
-│   │   │   ├── RiskIndicator/DefconIndicator.tsx
-│   │   │   └── Views/{Air,Marine,Cyber}View.tsx
-│   │   ├── hooks/useWebSocket.ts
-│   │   ├── types/events.ts
-│   │   └── styles/index.css
-│   └── vite.config.ts
-├── config/
-│   └── settings.yaml
-└── README.md
-```
+| GET | `/api/risk` | Current DEFCON global risk level |
+| GET | `/api/layers` | Available layers + current event counts |
+| WS | `/ws` | Real-time multiplexed WebSocket stream |
 
 ---
 
@@ -186,9 +146,9 @@ dhruva/
 
 1. Create `collectors/your_collector.py` extending `BaseCollector`
 2. Implement the `collect()` method returning `list[dict]`
-3. Register it in `backend/main.py` collectors list
-4. Add the layer type to `EventType` enum in `models.py`
-5. Add layer config in `frontend/src/types/events.ts`
+3. Register it in `backend/main.py`'s active collectors array
+4. Add the layer type to `EventType` enum in `backend/models.py`
+5. Add the respective layer toggle and SVG icon in `frontend/src/types/events.ts` and `LayerIcon.tsx`
 
 ---
 
