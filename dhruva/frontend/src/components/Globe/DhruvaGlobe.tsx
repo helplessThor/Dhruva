@@ -328,13 +328,11 @@ const DhruvaGlobe: React.FC<DhruvaGlobeProps> = ({ events, enabledLayers, onEven
                 <DarkBasemap />
 
                 {flatEvents.map((event) => {
-                    // For aircraft and military_aircraft, rotate icon to match heading
-                    const headingDeg = (event.type === 'aircraft' || event.type === 'military_aircraft')
-                        ? (event.metadata?.heading ?? 0)
-                        : 0;
-                    const rotation = (event.type === 'aircraft' || event.type === 'military_aircraft')
-                        ? -headingDeg * (Math.PI / 180)
-                        : 0;
+                    // For vehicles with headings, rotate icon to match compass direction.
+                    // Note: CesiumJS billboards rotate clockwise in radians natively.
+                    const hasHeading = ["aircraft", "military_aircraft", "marine", "military_marine"].includes(event.type);
+                    const headingDeg = hasHeading ? (event.metadata?.heading ?? 0) : 0;
+                    const rotationObj = hasHeading ? headingDeg * (Math.PI / 180) : 0;
 
                     return (
                         <Entity
@@ -351,10 +349,10 @@ const DhruvaGlobe: React.FC<DhruvaGlobeProps> = ({ events, enabledLayers, onEven
                                 // Aircraft needs to be slightly smaller to prevent huge overlapping clusters.
                                 scale={(event.type === 'aircraft' || event.type === 'military_aircraft') ? 0.45 : 0.60}
                                 // scaleByDistance: [Distance Near, Scale Near, Distance Far, Scale Far]
-                                // So at 500km altitude (zoomed in) scale is 1.5 (150% of base scale). 
+                                // So at 500km altitude (zoomed in) scale is 1.5 (150% of base scale).
                                 // At 15000km altitude (zoomed far out) scale drops linearly to 0.6 (60% of base scale).
                                 scaleByDistance={new NearFarScalar(5.0e5, 1.5, 1.5e7, 0.6)}
-                                rotation={rotation}
+                                rotation={rotationObj}
                                 alignedAxis={Cartesian3.ZERO}
                             />
                         </Entity>
