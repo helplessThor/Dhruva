@@ -42,13 +42,8 @@ NGA_MSI_BROADCAST_WARN_URL = "https://msi.gs.mil/api/publications/broadcast-warn
 HEXDB_URL = "https://hexdb.io/api/v1/aircraft/{icao}"
 
 # ── ICAO24 hex ranges that are 100% military-exclusive ───────────────────
-# ONLY include ranges where NO civilian aircraft exist.
-# US DOD blocks confirmed via FAA Order JO 7110.65.
-MILITARY_ICAO_PREFIXES: dict[str, str] = {
-    "ae": "US Military (DoD)",
-    "af": "US Military (DoD)",
-    "445": "NATO AWACS",          # E-3A Sentry fleet, Belgium registry
-}
+# Removed aggressively broad ICAO prefix matching due to civilian false-positives.
+MILITARY_ICAO_PREFIXES: dict[str, str] = {}
 
 # ── Known military ICAO aircraft type codes ───────────────────────────────
 # Cross-referenced from ICAO Doc 8643 + ADS-B Exchange military list.

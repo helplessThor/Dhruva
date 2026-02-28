@@ -231,7 +231,7 @@ class AircraftCollector(BaseCollector):
     AEROAPI_BASE = "https://aeroapi.flightaware.com/aeroapi"
     OPENSKY_URL = "https://opensky-network.org/api/states/all"
 
-    MAX_AIRCRAFT = 400       # Cap per-source per-region
+    MAX_AIRCRAFT = 500       # Cap per-source per-region
     COLLECTION_INTERVAL = 30  # seconds between collections
 
     # Search regions for global coverage (lat_min, lat_max, lon_min, lon_max, label)

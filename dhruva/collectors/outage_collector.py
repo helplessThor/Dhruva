@@ -73,6 +73,7 @@ class OutageCollector(BaseCollector):
     """Collect internet outage alerts from IODA using discrete 30-minute windows."""
     def __init__(self, interval: int = WINDOW_SECONDS):
         super().__init__(name="outage", interval=interval)
+        self._location_cache: dict[str, tuple[float, float] | None] = {}
 
     async def collect(self) -> list[dict]:
         # Query the *previous closed* 30-minute window to avoid partial data.
@@ -99,7 +100,7 @@ class OutageCollector(BaseCollector):
 
         events: list[dict] = []
         for alert in alerts:
-            event = self._alert_to_event(alert, from_ts=from_ts, until_ts=until_ts)
+            event = await self._alert_to_event(alert, from_ts=from_ts, until_ts=until_ts)
             if event:
                 events.append(event)
 
@@ -125,7 +126,7 @@ class OutageCollector(BaseCollector):
 
         return []
 
-    def _alert_to_event(self, alert: dict, *, from_ts: int, until_ts: int) -> dict | None:
+    async def _alert_to_event(self, alert: dict, *, from_ts: int, until_ts: int) -> dict | None:
         lat = self._to_float(alert.get("latitude") or alert.get("lat"))
         lon = self._to_float(alert.get("longitude") or alert.get("lon"))
 
@@ -163,7 +164,13 @@ class OutageCollector(BaseCollector):
             if centroid:
                 lat, lon = centroid
             else:
-                return None
+                # Dynamic Global Fallback to OpenStreetMap instead of dropping data
+                dynamic_geo = await self._resolve_location(entity)
+                if dynamic_geo:
+                    lat, lon = dynamic_geo
+                else:
+                    logger.debug("[outage] Dropping event, unable to geographically resolve entity: %s", entity)
+                    return None
 
         impact = self._to_float(
             alert.get("impact")
@@ -255,6 +262,35 @@ class OutageCollector(BaseCollector):
         if impact >= 0.4:
             return 3
         return 2
+
+    async def _resolve_location(self, entity: str) -> tuple[float, float] | None:
+        """Dynamically geolocate any entity string using OpenStreetMap to guarantee global coverage."""
+        if not entity or entity == "Unknown":
+            return None
+            
+        if entity in self._location_cache:
+            return self._location_cache[entity]
+            
+        import urllib.parse
+        import httpx
+        url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(entity)}&format=json&limit=1"
+        try:
+            if not self._http_client:
+                self._http_client = httpx.AsyncClient(timeout=30.0)
+            headers = {"User-Agent": "Dhruva-OSINT-Engine/1.0"}
+            resp = await self._http_client.get(url, headers=headers, timeout=10.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data and len(data) > 0:
+                    lat = float(data[0]["lat"])
+                    lon = float(data[0]["lon"])
+                    self._location_cache[entity] = (lat, lon)
+                    return lat, lon
+        except Exception as e:
+            logger.debug("[outage] Nominatim resolution failed for %s: %s", entity, e)
+            
+        self._location_cache[entity] = None
+        return None
 
     @staticmethod
     def _centroid_for_entity(entity: str, *, entity_code: str = "") -> tuple[float, float] | None:

@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     gdelt_interval: int = 300
     naval_interval: int = 3600
     gdelt_interval: int = 300
-    satellite_interval: int = 60
+    satellite_interval: int = 600
 
     # API Keys (optional — collectors use public APIs or mock data)
     acled_email: Optional[str] = None

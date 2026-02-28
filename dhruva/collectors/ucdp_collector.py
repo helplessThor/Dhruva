@@ -23,7 +23,8 @@ CONFLICT_KEYWORDS = [
     "gunfight", "artillery strike", "drone strike", "troops open fire",
     "border clash", "skirmish", "cross-border fire", "exchange fire",
     "protest", "violent protest", "non-violent protest", "political violence",
-    "civil unrest", "riot", "demonstration"
+    "civil unrest", "riot", "demonstration", "war", "open-war", "declared war", "retaliate",
+    "air strike", "surgical strike", "riots"
 ]
 
 RSS_FEEDS = [

@@ -189,7 +189,7 @@ def _vessel_type_label(type_code: int) -> str:
 # Format: [[lat1, lon1], [lat2, lon2]] (two opposite corners)
 # AISStream supports overlapping boxes without duplicate data.
 SHIPPING_BBOXES = [
-    [[90.0, -180.0], [-90.0, 180.0]]
+    [[-90.0, -180.0], [90.0, 180.0]]
     # # ── Large Ocean Basins ──
     # # North Atlantic (Europe ↔ Americas)
     # [[60.0, 0.0], [20.0, -60.0]],
