@@ -38,6 +38,7 @@ class CyberCollector(BaseCollector):
         # 2 minutes interval is reasonable. ThreatFox updates frequently.
         super().__init__(name="cyber", interval=interval)
         self._seen_ids: set[str] = set()
+        self._active_events: dict[str, dict] = {}
 
     def _get_api_key(self) -> str:
         try:
@@ -189,7 +190,7 @@ class CyberCollector(BaseCollector):
                 f"Location: {geo.get('city', 'Unknown')}, {geo.get('country', 'Unknown')}"
             ]
             
-            events.append({
+            self._active_events[ioc_id] = {
                 "id": f"cyber-tf-{ioc_id}",
                 "type": "cyber",
                 "latitude": round(geo["lat"], 4),
@@ -210,11 +211,27 @@ class CyberCollector(BaseCollector):
                     "city": geo.get("city"),
                     "country": geo.get("country")
                 },
-            })
+            }
+            
+        # Purge _active_events older than 24 hours to keep map fresh
+        now_utc = datetime.now(timezone.utc)
+        stale_ids = []
+        for eid, ev in self._active_events.items():
+            try:
+                # Event timestamp is ISO string
+                ev_time = datetime.fromisoformat(ev["timestamp"])
+                if (now_utc - ev_time).total_seconds() > 86400:
+                    stale_ids.append(eid)
+            except Exception:
+                pass
+                
+        for eid in stale_ids:
+            del self._active_events[eid]
             
         # Bound the seen cache
         if len(self._seen_ids) > 5000:
             self._seen_ids = set(list(self._seen_ids)[-2000:])
 
-        logger.info("[cyber] ThreatFox returned %d geolocatable IOCs", len(events))
-        return events
+        active_list = list(self._active_events.values())
+        logger.info("[cyber] ThreatFox returning %d total active geolocatable IOCs", len(active_list))
+        return active_list
