@@ -231,23 +231,29 @@ class AircraftCollector(BaseCollector):
     AEROAPI_BASE = "https://aeroapi.flightaware.com/aeroapi"
     OPENSKY_URL = "https://opensky-network.org/api/states/all"
 
-    MAX_AIRCRAFT = 500       # Cap per-source per-region
+    MAX_AIRCRAFT = 1000       # Cap per-source per-region
     COLLECTION_INTERVAL = 30  # seconds between collections
 
-    # Search regions for global coverage (lat_min, lat_max, lon_min, lon_max, label)
+    # Global Grid (lat_min, lat_max, lon_min, lon_max, label)
+    # Divided into 12 interlocking bands covering 100% of the Earth (-90 to +90 lat, -180 to +180 lon)
     SEARCH_REGIONS = [
-        (20, 50, 60, 100, "South Asia / India"),
-        (30, 55, -10, 40, "Europe"),
-        (25, 50, -130, -60, "North America"),
-        (0, 30, 90, 145, "Southeast Asia / Pacific"),
-        (15, 40, 30, 65, "Middle East"),
-        (50, 72, 30, 180, "Russia / Siberia"),
-        (-35, 15, -20, 55, "Africa"),
-        (-55, 15, -80, -35, "South America"),
-        (-10, 25, -60, -15, "Atlantic / Caribbean"),
-        (-50, -10, 110, 180, "Australia / Oceania"),
-        (30, 55, 100, 145, "East Asia / China / Japan"),
-        (-70, -50, -180, 180, "Southern Ocean / Antarctica"),
+        # ── Northern Hemisphere ──
+        ( 45,  90, -180,  -90, "Arctic / North America West"),
+        ( 45,  90,  -90,    0, "Arctic / North America East"),
+        ( 45,  90,    0,   90, "Arctic / Europe & Russia West"),
+        ( 45,  90,   90,  180, "Arctic / Russia East & Pacific"),
+        
+        # ── Equatorial & Mid-Latitudes ──
+        (  0,  45, -180,  -90, "Pacific / Central America"),
+        (  0,  45,  -90,    0, "Atlantic / Caribbean / West Africa"),
+        (  0,  45,    0,   90, "Africa / Middle East / South Asia"),
+        (  0,  45,   90,  180, "Southeast Asia / West Pacific"),
+        
+        # ── Southern Hemisphere ──
+        (-90,   0, -180,  -90, "South Pacific"),
+        (-90,   0,  -90,    0, "South America / South Atlantic"),
+        (-90,   0,    0,   90, "South Africa / Indian Ocean"),
+        (-90,   0,   90,  180, "Australia / Oceania / Southern Ocean"),
     ]
 
     def __init__(self, interval: int = 30):
