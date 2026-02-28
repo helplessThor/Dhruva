@@ -17,6 +17,10 @@ EARTHQUAKE_KEYWORDS = [
 
 RSS_FEEDS = [
     "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en",
+    "https://www.bing.com/news/search?q={query}&format=rss",
+    "https://news.search.yahoo.com/rss?p={query}",
+    # Web search specifically forcing Twitter/X OSINT handles + Major News Investigative sites
+    "https://www.bing.com/search?q={query}+(site:twitter.com OR site:x.com OR site:reuters.com OR site:apnews.com OR site:bellingcat.com)&format=rss",
 ]
 class EarthquakeCollector(BaseCollector):
     """Fetches real-time earthquake data from USGS."""
@@ -28,7 +32,7 @@ class EarthquakeCollector(BaseCollector):
 
     def __init__(self, interval: int = 30):
         super().__init__(name="earthquake", interval=interval)
-        self.retention_hours = 48.0
+        self.retention_hours = 24.0
         
         # State tracking for OSINT Scraper
         self._last_osint_scrape: datetime | None = None
@@ -141,18 +145,32 @@ class EarthquakeCollector(BaseCollector):
         # Aggregate news items by region to cross-verify and prevent Rate Limiting
         events_by_region = {}
         
-        query_str = "(" + " OR ".join(f'"{kw}"' for kw in EARTHQUAKE_KEYWORDS) + f") when:{self.FRESHNESS_HOURS}h"
-        encoded_query = urllib.parse.quote(query_str)
-        
+        # Chunk keywords to prevent 414 URI Too Long errors across diverse search engines
+        chunk_size = 3
+        keyword_chunks = [EARTHQUAKE_KEYWORDS[i:i + chunk_size] for i in range(0, len(EARTHQUAKE_KEYWORDS), chunk_size)]
+
+        if not self._http_client:
+            import httpx
+            # Use a generic User-Agent to bypass simple blocks from Bing/Yahoo
+            self._http_client = httpx.AsyncClient(
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                timeout=30.0
+            )
+            
         for base_feed in RSS_FEEDS:
-            url = base_feed.format(query=encoded_query)
-            try:
-                if not self._http_client:
-                    import httpx
-                    self._http_client = httpx.AsyncClient(timeout=30.0)
+            for chunk in keyword_chunks:
+                # Google News strictly supports the 'when:XXh' operator
+                query_str = " OR ".join(f'"{kw}"' for kw in chunk)
+                if "news.google.com" in base_feed:
+                    query_str += f" when:{self.FRESHNESS_HOURS}h"
                     
-                resp = await self._http_client.get(url, timeout=30.0)
-                resp.raise_for_status()
+                encoded_query = urllib.parse.quote(query_str)
+                url = base_feed.format(query=encoded_query)
+                
+                try:
+                    resp = await self._http_client.get(url)
+                    if resp.status_code != 200:
+                        continue
                 
                 # Parse XML
                 root = ET.fromstring(resp.text)
@@ -198,12 +216,12 @@ class EarthquakeCollector(BaseCollector):
                         events_by_region[loc_name]["titles"].append(title)
                         events_by_region[loc_name]["links"].add(link)
                         
-                    except Exception as e:
-                        logger.debug("[earthquake] Failed to parse RSS item: %s", e)
-                        
-            except Exception as e:
-                logger.error("[earthquake] Failed to scrape RSS feed: %s", e)
-                
+                        except Exception as e:
+                            logger.debug("[earthquake] Failed to parse RSS item: %s", e)
+                            
+                except Exception as e:
+                    logger.debug("[earthquake] Failed to scrape RSS feed chunk: %s", e)
+                    
         # Groq AI Verification
         osint_results = []
         for loc_name, data in events_by_region.items():
@@ -215,7 +233,8 @@ class EarthquakeCollector(BaseCollector):
                 f"You are a geophysical OSINT analyst observing global seismic reports.\n"
                 f"Title: '{primary_title}'\n"
                 f"Article Time: {data['latest_time'].isoformat()}\n\n"
-                "Task: Verify if this is a real-world, current news report of an Earthquake.\n"
+                "Task: Verify if this is a real-world, CURRENT news report of an Earthquake that occurred within the last 24 hours.\n"
+                "- CRITICAL: If the article discusses a historical earthquake (e.g., 2005, 1999) or an anniversary commemorative post, set is_earthquake to false immediately!\n"
                 "Extract the following information as strict JSON only.\n\n"
                 "RULES:\n"
                 "- Extract coordinates and location as accurately as possible.\n"
@@ -258,6 +277,16 @@ class EarthquakeCollector(BaseCollector):
                     
                 mag = float(result.get("magnitude", data["mag"]))
                 exact_time = result.get("exact_time") or data['latest_time'].isoformat()
+                
+                # Double-check Python programmatic shield against historical anniversaries
+                try:
+                    parsed_exact = datetime.fromisoformat(exact_time.replace("Z", "+00:00"))
+                    if (datetime.now(timezone.utc) - parsed_exact).total_seconds() > self.retention_hours * 3600:
+                        logger.debug("[earthquake] Dropping ancient earthquake event (%s) escaping AI rules.", exact_time)
+                        continue
+                except Exception:
+                    pass
+
                 ai_loc_name = result.get("location_name", loc_name)
                 reasoning = result.get("reasoning", "Verified as credible earthquake based on OSINT.")
                 

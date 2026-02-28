@@ -46,6 +46,8 @@ RSS_FEEDS = [
     "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en",
     "https://www.bing.com/news/search?q={query}&format=rss",
     "https://news.search.yahoo.com/rss?p={query}",
+    # Web search specifically forcing Twitter/X OSINT handles + Major News Investigative sites
+    "https://www.bing.com/search?q={query}+(site:twitter.com OR site:x.com OR site:reuters.com OR site:apnews.com OR site:bellingcat.com)&format=rss",
 ]
 
 class UCDPCollector(BaseCollector):
@@ -309,7 +311,8 @@ class UCDPCollector(BaseCollector):
                 f"You are an OSINT intelligence analyst observing global conflicts.\n"
                 f"Title: '{primary_title}'\n"
                 f"Article Time: {data['latest_time'].isoformat()}\n\n"
-                "Task: Verify if this represents a real-world, current Armed Conflict, Terrorist Attack, or Military Clash.\n"
+                "Task: Verify if this represents a real-world, CURRENT Armed Conflict, Terrorist Attack, or Military Clash.\n"
+                "- CRITICAL: If the article discusses a historical conflict (e.g., 2005 clash, 1994 genocide) or an anniversary commemorative post, set is_conflict to false immediately!\n"
                 "Extract the following information as strict JSON only. Do not add markdown or comments.\n\n"
                 "RULES FOR ATTRIBUTION:\n"
                 "- If Country B attacks Country A, mark ONLY Country A (the victim) as affected.\n"
@@ -347,6 +350,16 @@ class UCDPCollector(BaseCollector):
                     continue
                     
                 exact_time = result.get("exact_time") or data['latest_time'].isoformat()
+                
+                # Double-check Python programmatic shield against historical anniversaries
+                try:
+                    parsed_exact = datetime.fromisoformat(exact_time.replace("Z", "+00:00"))
+                    if (datetime.now(timezone.utc) - parsed_exact).total_seconds() > self.FRESHNESS_HOURS * 3600:
+                        logger.debug("[ucdp] Dropping ancient conflict event (%s) escaping AI rules.", exact_time)
+                        continue
+                except Exception:
+                    pass
+
                 reasoning = result.get("reasoning", "Verified as credible conflict based on OSINT.")
                 
                 for loc in locations:
