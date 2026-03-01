@@ -20,7 +20,7 @@ from backend.redis_manager import RedisStreamManager
 from backend.websocket_manager import ConnectionManager
 from datetime import datetime, timezone
 
-from fusion_engine.normalizer import normalize_batch
+from fusion_engine.normalizer import normalize_batch, deduplicate_osint_batch
 from fusion_engine.risk_calculator import calculate_risk
 from fusion_engine.intel_hotspot_engine import compute_hotspots, compute_convergence_alerts
 from fusion_engine.country_instability import compute_cii
@@ -40,6 +40,8 @@ from collectors.acled_collector import ACLEDCollector
 from collectors.acled_cast_collector import ACLEDCastCollector
 from collectors.naval_collector import NavalCollector
 from collectors.satellite_collector import SatelliteCollector
+from collectors.notam_collector import NotamCollector
+from collectors.news_collector import NewsCollector
 
 # ─── Logging ───────────────────────────────────────
 logging.basicConfig(
@@ -74,11 +76,13 @@ event_store: dict[str, list[dict]] = {
     "acled_cast": [],
     "naval": [],
     "protest": [],
-    "gdelt_conflict": [],
     "intel_hotspot": [],
     "convergence": [],
     "cii": [],
     "satellite": [],
+    "notam": [],
+    "news": [],
+    "news": [],
 }
 current_risk: dict = {"level": 1, "label": "NOMINAL", "color": "#00ff88"}
 
@@ -104,12 +108,14 @@ collectors = [
     ACLEDCastCollector(interval=21600),  # Fetch every 6 hours
     NavalCollector(interval=settings.naval_interval),
     SatelliteCollector(interval=settings.satellite_interval),
+    NotamCollector(interval=180),
+    NewsCollector(interval=300),
 ]
 
 # Layer types that trigger hotspot / convergence recompute
 HOTSPOT_TRIGGER_LAYERS = {
     "military", "ucdp", "acled", "acled_cast",
-    "earthquake", "fire", "protest", "gdelt_conflict",
+    "earthquake", "fire", "protest",
     "military_marine", "cyber", "outage",
 }
 
@@ -154,49 +160,6 @@ async def run_collector(collector):
             continue
 
         etype = collector.name
-
-        # ── GDELT: split into sub-layers ───────────────────────────
-        if etype == "gdelt":
-            protests = [e for e in events if e.get("type") == "protest"]
-            gdelt_conflicts = [e for e in events if e.get("type") == "gdelt_conflict"]
-
-            if protests:
-                norm_protests = normalize_batch(protests)
-                event_store["protest"] = norm_protests
-                data_freshness["protest"] = datetime.now(timezone.utc).isoformat()
-                await ws_manager.broadcast({
-                    "action": "event_batch",
-                    "layer": "protest",
-                    "data": norm_protests,
-                    "risk": current_risk,
-                })
-
-            if gdelt_conflicts:
-                norm_gc = normalize_batch(gdelt_conflicts)
-                event_store["gdelt_conflict"] = norm_gc
-                data_freshness["gdelt_conflict"] = datetime.now(timezone.utc).isoformat()
-                await ws_manager.broadcast({
-                    "action": "event_batch",
-                    "layer": "gdelt_conflict",
-                    "data": norm_gc,
-                    "risk": current_risk,
-                })
-
-            # Recompute fusion for GDELT data
-            _recompute_fusion()
-            await ws_manager.broadcast({
-                "action": "event_batch",
-                "layer": "intel_hotspot",
-                "data": event_store.get("intel_hotspot", []),
-                "risk": current_risk,
-            })
-            await ws_manager.broadcast({
-                "action": "event_batch",
-                "layer": "convergence",
-                "data": event_store.get("convergence", []),
-                "risk": current_risk,
-            })
-            continue  # Skip generic processing below for gdelt
 
         # ── Marine: split military_marine from marine ────────────────
         if etype == "marine":
@@ -297,6 +260,7 @@ async def run_collector(collector):
         # ── Naval & UCDP Scrapers: Broadcast on native layer ────
         if etype in ["ucdp", "naval"]:
             normalized_osint = normalize_batch(events)
+            normalized_osint = deduplicate_osint_batch(normalized_osint)
             
             event_store[etype] = normalized_osint
             data_freshness[etype] = datetime.now(timezone.utc).isoformat()
@@ -324,10 +288,54 @@ async def run_collector(collector):
             })
             continue  # Skip generic processing
 
+        # ── News Ticker bypass (No fusion, no map points) ────────────
+        if etype == "news":
+            # For news, we simply replace the exact 10 deduplicated headlines
+            event_store["news"] = events
+            data_freshness["news"] = datetime.now(timezone.utc).isoformat()
+            await ws_manager.broadcast({
+                "action": "event_batch",
+                "layer": "news",
+                "data": events,
+                "risk": current_risk,
+            })
+            continue
+
+        # ── News Ticker bypass (No fusion, no map points) ────────────
+        if etype == "news":
+            # For news, we simply replace the exact 10 deduplicated headlines
+            event_store["news"] = events
+            data_freshness["news"] = datetime.now(timezone.utc).isoformat()
+            await ws_manager.broadcast({
+                "action": "event_batch",
+                "layer": "news",
+                "data": events,
+                "risk": current_risk,
+            })
+            continue
+
         # ── Generic processing ───────────────────────────────────────
         normalized = normalize_batch(events)
+        if etype in ["earthquake", "notam"]:
+            normalized = deduplicate_osint_batch(normalized)
+            
         event_store[etype] = normalized
         data_freshness[etype] = datetime.now(timezone.utc).isoformat()
+
+        # Recalculate global risk cache
+        all_events_generic = []
+        for ev_list in event_store.values():
+            if isinstance(ev_list, list):
+                all_events_generic.extend(ev_list)
+        current_risk = calculate_risk(all_events_generic)
+
+        # Broadcast the new layer data to all connected clients!
+        await ws_manager.broadcast({
+            "action": "event_batch",
+            "layer": etype,
+            "data": event_store[etype],
+            "risk": current_risk,
+        })
 
         # Post-processing: infer military aircraft from ADS-B data
         if etype == "aircraft":

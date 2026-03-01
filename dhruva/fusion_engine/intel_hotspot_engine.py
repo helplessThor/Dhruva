@@ -7,7 +7,7 @@ actual incoming data — no synthetic scoring.
 Hotspot determination:
   - Divides the globe into 1° × 1° grid cells
   - Counts real events per cell from: military, ucdp, acled, conflict,
-    earthquake, fire, protest, gdelt_conflict, military_marine
+    earthquake, fire, military_marine
   - Cells with events from ≥2 different source types become hotspots
   - Severity reflects the number of contributing sources and event count
 
@@ -26,7 +26,7 @@ logger = logging.getLogger("dhruva.fusion")
 # Which event types contribute to intelligence hotspots
 HOTSPOT_SOURCE_TYPES = {
     "military", "ucdp", "acled", "conflict", "earthquake", "fire",
-    "protest", "gdelt_conflict", "military_marine",
+    "military_marine",
 }
 
 # Grid resolution in degrees (1° ≈ 111 km at equator)

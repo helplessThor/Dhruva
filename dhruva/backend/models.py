@@ -27,6 +27,7 @@ class EventType(str, Enum):
     INTEL_HOTSPOT = "intel_hotspot"
     CONVERGENCE = "convergence"
     SATELLITE = "satellite"
+    NOTAM = "notam"
 
 
 class Severity(int, Enum):
@@ -80,7 +81,7 @@ class LayerState(BaseModel):
     intel_hotspot: bool = True
     convergence: bool = True
     satellite: bool = False
-
+    notam: bool = True
 
 
 class WebSocketMessage(BaseModel):

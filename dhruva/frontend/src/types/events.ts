@@ -29,7 +29,9 @@ export type EventType =
     | 'naval'
     | 'intel_hotspot'
     | 'convergence'
-    | 'satellite';
+    | 'satellite'
+    | 'notam'
+    | 'news';
 
 export interface RiskLevel {
     level: number; // 1–5
@@ -84,4 +86,6 @@ export const LAYER_CONFIGS: LayerConfig[] = [
     { id: 'intel_hotspot', label: 'Intel Hotspots', icon: 'intel_hotspot', color: '#fbbf24', enabled: true },
     { id: 'convergence', label: 'Multi-Domain Convergence', icon: 'intel_hotspot', color: '#dc2626', enabled: true },
     { id: 'satellite', label: 'Live Satellites', icon: 'satellite', color: '#cbd5e1', enabled: false },
+    { id: 'notam', label: 'Airspace Closures', icon: 'military_aircraft', color: '#ef4444', enabled: true },
+    { id: 'news', label: 'Global News', icon: 'acled', color: '#ffffff', enabled: true },
 ];

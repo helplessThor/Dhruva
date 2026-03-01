@@ -1,5 +1,5 @@
 import React from 'react';
-import type { EventType, LayerConfig } from '../../types/events';
+import type { EventType } from '../../types/events';
 import { LAYER_CONFIGS } from '../../types/events';
 import LayerIcon from '../shared/LayerIcon';
 

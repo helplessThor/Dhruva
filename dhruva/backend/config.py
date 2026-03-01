@@ -28,20 +28,18 @@ class Settings(BaseSettings):
     cesium_ion_token: str = ""
 
     # Collector intervals (seconds)
-    earthquake_interval: int = 30
+    earthquake_interval: int = 120
     fire_interval: int = 600
-    conflict_interval: int = 3600
-    aircraft_interval: int = 15
-    marine_interval: int = 30
-    cyber_interval: int = 60
+    conflict_interval: int = 1800
+    aircraft_interval: int = 30
+    marine_interval: int = 180
+    cyber_interval: int = 120
     outage_interval: int = 1800
     economic_interval: int = 300
     military_interval: int = 120
-    ucdp_interval: int = 20
+    ucdp_interval: int = 120
     acled_interval: int = 3600
-    gdelt_interval: int = 300
     naval_interval: int = 3600
-    gdelt_interval: int = 300
     satellite_interval: int = 600
 
     # API Keys (optional — collectors use public APIs or mock data)

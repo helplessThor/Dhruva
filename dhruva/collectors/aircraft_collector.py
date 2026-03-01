@@ -1,11 +1,6 @@
-"""Dhruva — ADS-B Aircraft Tracking Collector (FlightAware + OpenSky Dual-Source).
+"""Dhruva — ADS-B Aircraft Tracking Collector (OpenSky).
 
-Uses FlightAware AeroAPI v4 as primary source with:
-  - Strict 10 requests/minute sliding-window rate limiter
-  - Real origin/destination/airline from API
-  - Heading, altitude, speed in metadata
-
-Uses OpenSky Network as concurrent enrichment source with:
+Uses OpenSky Network as primary source with:
   - OAuth2 client-credentials authentication (4000 credits/day)
   - Bounding-box queries for credit efficiency
   - Extended metadata: squawk, category, vertical_rate, geo_altitude
@@ -24,19 +19,6 @@ from pathlib import Path
 from collectors.base_collector import BaseCollector
 
 logger = logging.getLogger("dhruva.collector")
-
-# ── Load FlightAware API key ────────────────────────────────────────
-_KEY_FILE = Path(__file__).resolve().parent.parent / "flight api key.txt"
-FLIGHTAWARE_API_KEY: str = ""
-if _KEY_FILE.exists():
-    FLIGHTAWARE_API_KEY = _KEY_FILE.read_text().strip()
-    logger.info("[aircraft] FlightAware API key loaded from %s", _KEY_FILE.name)
-else:
-    FLIGHTAWARE_API_KEY = os.environ.get("DHRUVA_FLIGHTAWARE_KEY", "")
-    if FLIGHTAWARE_API_KEY:
-        logger.info("[aircraft] FlightAware API key loaded from env")
-    else:
-        logger.warning("[aircraft] No FlightAware API key found — will use mock data")
 
 # ── Load OpenSky OAuth2 credentials ────────────────────────────────
 _CREDS_FILE = Path(__file__).resolve().parent.parent / "credentials.json"
@@ -89,34 +71,6 @@ AIRCRAFT_CATEGORIES = {
 
 POSITION_SOURCES = {0: "ADS-B", 1: "ASTERIX", 2: "MLAT", 3: "FLARM"}
 
-
-class RateLimiter:
-    """Sliding-window rate limiter: max N calls per window_seconds."""
-
-    def __init__(self, max_calls: int = 10, window_seconds: float = 60.0):
-        self.max_calls = max_calls
-        self.window = window_seconds
-        self._timestamps: deque[float] = deque()
-
-    def can_call(self) -> bool:
-        self._prune()
-        return len(self._timestamps) < self.max_calls
-
-    def record(self):
-        self._timestamps.append(time.monotonic())
-
-    def wait_time(self) -> float:
-        """Seconds until the next call is allowed."""
-        self._prune()
-        if len(self._timestamps) < self.max_calls:
-            return 0.0
-        oldest = self._timestamps[0]
-        return max(0.0, self.window - (time.monotonic() - oldest))
-
-    def _prune(self):
-        cutoff = time.monotonic() - self.window
-        while self._timestamps and self._timestamps[0] < cutoff:
-            self._timestamps.popleft()
 
 
 class OpenSkyAuth:
@@ -226,9 +180,8 @@ class OpenSkyCreditManager:
 
 
 class AircraftCollector(BaseCollector):
-    """ADS-B collector: FlightAware (primary) + OpenSky (enrichment)."""
+    """ADS-B collector: OpenSky."""
 
-    AEROAPI_BASE = "https://aeroapi.flightaware.com/aeroapi"
     OPENSKY_URL = "https://opensky-network.org/api/states/all"
 
     MAX_AIRCRAFT = 5000       # Cap per-source per-region
@@ -261,10 +214,7 @@ class AircraftCollector(BaseCollector):
 
     def __init__(self, interval: int = 30):
         super().__init__(name="aircraft", interval=max(interval, self.COLLECTION_INTERVAL))
-        self._fa_rate_limiter = RateLimiter(max_calls=10, window_seconds=60.0)
-        self._fa_region_index = 0      # FlightAware region rotation
         self._osky_region_index = 0    # OpenSky region rotation (offset for coverage)
-        self._use_flightaware = bool(FLIGHTAWARE_API_KEY)
 
         # OpenSky auth & credit management
         self._opensky_auth = OpenSkyAuth(OPENSKY_CLIENT_ID, OPENSKY_CLIENT_SECRET)
@@ -272,42 +222,22 @@ class AircraftCollector(BaseCollector):
         self._use_opensky = bool(OPENSKY_CLIENT_ID)
 
         # Region-keyed caches: keeps flights from all regions alive
-        self._fa_cache: dict[int, list[dict]] = {}   # FlightAware
         self._osky_cache: dict[int, list[dict]] = {}  # OpenSky
 
         # Start OpenSky at a different region offset for better coverage
         self._osky_region_index = len(self.SEARCH_REGIONS) // 2
 
     async def collect(self) -> list[dict]:
-        """Collect from both sources concurrently and merge."""
-        tasks = []
-
-        # FlightAware task
-        if self._use_flightaware:
-            tasks.append(self._collect_flightaware_safe())
+        """Collect flights from OpenSky."""
+        await self._collect_opensky_safe()
         
-        # OpenSky task (runs concurrently, not just as fallback)
-        tasks.append(self._collect_opensky_safe())
-
-        if tasks:
-            await asyncio.gather(*tasks)
-
         merged = self._merge_all_flights()
 
-        # If nothing from either source, generate mock
+        # If nothing from source, generate mock
         if not merged:
             merged = self._generate_mock_data()
 
         return merged
-
-    async def _collect_flightaware_safe(self):
-        """FlightAware collection with error handling."""
-        try:
-            events = await self._collect_flightaware()
-            if events is not None:
-                return
-        except Exception as e:
-            logger.warning("[aircraft] FlightAware error: %s", e)
 
     async def _collect_opensky_safe(self):
         """OpenSky collection with error handling."""
@@ -316,59 +246,13 @@ class AircraftCollector(BaseCollector):
         except Exception as e:
             logger.warning("[aircraft] OpenSky error: %s", e)
 
-    async def _collect_flightaware(self) -> list[dict] | None:
-        """Fetch flights from FlightAware AeroAPI /flights/search."""
-        wait = self._fa_rate_limiter.wait_time()
-        if wait > 0:
-            logger.info("[aircraft] FlightAware rate limited — waiting %.1fs", wait)
-            await asyncio.sleep(wait)
-
-        region_idx = self._fa_region_index % len(self.SEARCH_REGIONS)
-        region = self.SEARCH_REGIONS[region_idx]
-        self._fa_region_index += 1
-        lat_min, lat_max, lon_min, lon_max, label = region
-
-        query = f'-latlong "{lat_min} {lon_min} {lat_max} {lon_max}"'
-        url = f"{self.AEROAPI_BASE}/flights/search"
-
-        if not self._http_client:
-            import httpx
-            self._http_client = httpx.AsyncClient(timeout=30.0)
-
-        self._fa_rate_limiter.record()
-        logger.info("[aircraft] AeroAPI query: %s (%s)", label, query)
-
-        resp = await self._http_client.get(
-            url,
-            params={"query": query},
-            headers={"x-apikey": FLIGHTAWARE_API_KEY},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        flights = data.get("flights", []) or []
-        events = []
-
-        for flight in flights[:self.MAX_AIRCRAFT]:
-            try:
-                event = self._parse_flightaware_flight(flight)
-                if event:
-                    events.append(event)
-            except Exception as e:
-                logger.debug("[aircraft] Skipping FA flight: %s", e)
-                continue
-
-        logger.info("[aircraft] AeroAPI returned %d flights from %s", len(events), label)
-        self._fa_cache[region_idx] = events
-        return events
-
     async def _collect_opensky(self) -> list[dict]:
         """Fetch flights from OpenSky Network with OAuth2 authentication."""
         if not self._http_client:
             import httpx
             self._http_client = httpx.AsyncClient(timeout=30.0)
 
-        # Pick next region (rotates independently from FlightAware)
+        # Pick next region
         region_idx = self._osky_region_index % len(self.SEARCH_REGIONS)
         region = self.SEARCH_REGIONS[region_idx]
         self._osky_region_index += 1
@@ -521,116 +405,18 @@ class AircraftCollector(BaseCollector):
         }
 
     def _merge_all_flights(self) -> list[dict]:
-        """Merge flights from both FlightAware and OpenSky caches, deduplicating by ID."""
+        """Aggregate flights from OpenSky cache, deduplicating by ID."""
         seen_ids: set[str] = set()
         merged: list[dict] = []
 
-        # FlightAware first (higher quality data)
-        for region_flights in self._fa_cache.values():
+        for region_flights in self._osky_cache.values():
             for flight in region_flights:
                 fid = flight["id"]
                 if fid not in seen_ids:
                     seen_ids.add(fid)
                     merged.append(flight)
 
-        # Then OpenSky (supplements with additional aircraft)
-        # Also try to match by callsign to avoid duplicates across sources
-        fa_callsigns = {
-            f.get("metadata", {}).get("callsign", "").strip().upper()
-            for f in merged if f.get("metadata", {}).get("callsign")
-        }
-
-        for region_flights in self._osky_cache.values():
-            for flight in region_flights:
-                fid = flight["id"]
-                callsign = flight.get("metadata", {}).get("callsign", "").strip().upper()
-                # Skip if we already have this ID or callsign from FlightAware
-                if fid in seen_ids:
-                    continue
-                if callsign and callsign in fa_callsigns:
-                    continue
-                seen_ids.add(fid)
-                merged.append(flight)
-
         return merged
-
-    def _parse_flightaware_flight(self, flight: dict) -> dict | None:
-        """Parse a single FlightAware flight object into an OsintEvent."""
-        last_pos = flight.get("last_position") or {}
-        lat = last_pos.get("latitude")
-        lon = last_pos.get("longitude")
-
-        if lat is None or lon is None:
-            return None
-
-        # Extract fields
-        ident = flight.get("ident", "")
-        ident_icao = flight.get("ident_icao", "")
-        flight_number = flight.get("flight_number", "")
-
-        # Origin / destination
-        origin_info = flight.get("origin") or {}
-        dest_info = flight.get("destination") or {}
-        origin_code = origin_info.get("code_iata") or origin_info.get("code_icao") or "—"
-        origin_name = origin_info.get("name", "")
-        origin_city = origin_info.get("city", "")
-        dest_code = dest_info.get("code_iata") or dest_info.get("code_icao") or "—"
-        dest_name = dest_info.get("name", "")
-        dest_city = dest_info.get("city", "")
-
-        # Operator / airline
-        operator = flight.get("operator", "")
-        operator_icao = flight.get("operator_icao", "")
-
-        # Position data
-        altitude = last_pos.get("altitude", 0) or 0
-        alt_ft = altitude * 100 if altitude < 1000 else altitude
-        groundspeed = last_pos.get("groundspeed", 0) or 0
-        heading = last_pos.get("heading", 0)
-        aircraft_type = flight.get("aircraft_type", "")
-
-        # Build description
-        desc_parts = []
-        if alt_ft:
-            desc_parts.append(f"FL{alt_ft // 100:03d}" if alt_ft > 18000 else f"{alt_ft:,}ft")
-        if groundspeed:
-            desc_parts.append(f"{groundspeed}kts")
-        if heading is not None:
-            desc_parts.append(f"HDG {heading:.0f}°")
-        if origin_code != "—" and dest_code != "—":
-            desc_parts.append(f"{origin_code} → {dest_code}")
-
-        display_name = ident or ident_icao or flight_number or "Unknown"
-        airline_name = operator or operator_icao or "Unknown"
-
-        return {
-            "id": f"fa-{flight.get('fa_flight_id', ident)}",
-            "type": "aircraft",
-            "latitude": round(lat, 4),
-            "longitude": round(lon, 4),
-            "severity": 1,
-            "timestamp": last_pos.get("timestamp") or datetime.now(timezone.utc).isoformat(),
-            "source": "FlightAware AeroAPI",
-            "title": f"{display_name} — {airline_name}",
-            "description": " · ".join(desc_parts) if desc_parts else "In flight",
-            "metadata": {
-                "callsign": ident,
-                "flight_number": flight_number,
-                "icao24": ident_icao,
-                "airline": airline_name,
-                "operator_icao": operator_icao,
-                "origin": origin_code,
-                "origin_name": f"{origin_name}, {origin_city}" if origin_city else origin_name,
-                "destination": dest_code,
-                "destination_name": f"{dest_name}, {dest_city}" if dest_city else dest_name,
-                "aircraft_type": aircraft_type,
-                "registration": flight.get("registration", ""),
-                "altitude_ft": alt_ft,
-                "speed_knots": groundspeed,
-                "heading": heading,
-                "fa_flight_id": flight.get("fa_flight_id", ""),
-            },
-        }
 
     def _generate_mock_data(self) -> list[dict]:
         """Fallback mock data when all APIs are unavailable."""

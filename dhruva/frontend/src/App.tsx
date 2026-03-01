@@ -7,6 +7,7 @@ import AirTrafficView from './components/Views/AirTrafficView';
 import MarineTrafficView from './components/Views/MarineTrafficView';
 import CyberAttackView from './components/Views/CyberAttackView';
 import MarketTicker from './components/Ticker/MarketTicker';
+import LiveNewsTicker from './components/Ticker/LiveNewsTicker';
 import { useWebSocket } from './hooks/useWebSocket';
 import type { OsintEvent, EventType } from './types/events';
 import { LAYER_CONFIGS } from './types/events';
@@ -37,17 +38,17 @@ function App() {
   const eventCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const [type, layerEvents] of Object.entries(events)) {
-      counts[type] = layerEvents.length;
+      counts[type] = layerEvents?.length || 0;
     }
     return counts;
   }, [events]);
 
   const totalEvents = useMemo(() => {
-    return Object.values(events).reduce((sum, arr) => sum + arr.length, 0);
+    return Object.values(events).reduce((sum, arr) => sum + (arr?.length || 0), 0);
   }, [events]);
 
   const allEventsFlat = useMemo(() => {
-    return Object.values(events).flat();
+    return Object.values(events).filter(arr => Array.isArray(arr)).flat();
   }, [events]);
 
   return (
@@ -62,6 +63,9 @@ function App() {
         <div className="header-actions">
         </div>
       </header>
+
+      {/* ─── LIVE News Flow ─── */}
+      <LiveNewsTicker events={allEventsFlat} />
 
       {/* ─── Main Layout ─── */}
       <div className="dhruva-main">

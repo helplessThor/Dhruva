@@ -45,7 +45,7 @@ export function useWebSocket(): UseWebSocketReturn {
                         console.log(`[Dhruva WS] Received initial_state. Data type: ${Array.isArray(msg.data) ? 'Array' : typeof msg.data}`);
                         console.log(msg.data);
                         const grouped: Record<string, OsintEvent[]> = {};
-                        for (const event of msg.data) {
+                        for (const event of (msg.data || [])) {
                             if (!grouped[event.type]) grouped[event.type] = [];
                             grouped[event.type].push(event);
                         }
@@ -56,7 +56,7 @@ export function useWebSocket(): UseWebSocketReturn {
                     if (msg.action === 'event_batch' && msg.layer) {
                         setEvents(prev => ({
                             ...prev,
-                            [msg.layer!]: msg.data,
+                            [msg.layer!]: msg.data || [],
                         }));
                         if (msg.risk) setRisk(msg.risk);
                     }

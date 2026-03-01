@@ -3,10 +3,12 @@ import {
     Viewer,
     Entity,
     BillboardGraphics,
+    EllipseGraphics,
     useCesium,
 } from 'resium';
 import {
     Cartesian3,
+    Color,
     NearFarScalar,
     VerticalOrigin,
     UrlTemplateImageryProvider,
@@ -116,73 +118,51 @@ const MARKER_DEFS: Record<EventType, { color: string; symbol: string; scale: num
         symbol: '<ellipse cx="8" cy="8" rx="6" ry="2" fill="none" stroke="#fff" stroke-width="1.5" transform="rotate(-30 8 8)" /><circle cx="8" cy="8" r="3" fill="#fff" />',
         scale: 1.1,
     },
+    notam: {
+        color: '#ef4444',
+        symbol: '<path d="M8 1.5C4.4 1.5 1.5 4.4 1.5 8s2.9 6.5 6.5 6.5 6.5-2.9 6.5-6.5S11.6 1.5 8 1.5zm0 1.5c1.2 0 2.3.4 3.2 1l-7.7 7.7C2.9 10.8 2.5 9.4 2.5 8c0-3 2.5-5.5 5.5-5.5zm0 11c-1.2 0-2.3-.4-3.2-1l7.7-7.7c.6 1 1 2.3 1 3.7 0 3-2.5 5.5-5.5 5.5z" fill="#fff" />',
+        scale: 1.2,
+    },
+    news: {
+        color: '#ffffff',
+        symbol: '<circle cx="8" cy="8" r="6" fill="none" stroke="#fff" stroke-width="1.5" /><path d="M8 2v12M2 8h12" fill="none" stroke="#fff" stroke-width="1" />',
+        scale: 1.0,
+    }
 };
 
-/** Severity → glow strength (opacity multiplier for the halo) */
-const SEVERITY_GLOW: Record<number, number> = {
-    1: 0.50,
-    2: 0.45,
-    3: 0.55,
-    4: 0.70,
-    5: 0.90,
-};
 
-/** Builds a premium professional marker SVG: 3D Jewel + glassmorphic surface + sharp vector symbol */
+
+/** Builds a premium, crisp minimalist neon marker SVG (Conflictly style) */
 function buildMarkerSvg(type: EventType, severity: number): string {
     const def = MARKER_DEFS[type];
-    // Base size config for crisp SVG rendering at scale
-    // Cesium Billboard scaleByDistance handles zooming/scaling down
+    // Scale up base grid (64x64) for perfect rasterization by Cesium
     const size = 64;
-    const baseGlow = SEVERITY_GLOW[severity] || 0.4;
-    // Boost glow slightly for the new premium aesthetic
-    const glow = Math.min(0.95, baseGlow * 1.3);
     const sevColor = SEVERITY_COLORS[severity] || def.color;
 
-    // Unique IDs for SVG defs to prevent cross-bleeding
-    const haloId = `halo-${type}-${severity}`;
-    const glassId = `glass-${type}-${severity}`;
-    const ringId = `ring-${type}-${severity}`;
+    // Scale the 16x16 icon path
+    const symbolScale = Math.max(1.5, def.scale * 1.8);
+    const symbolOffsetX = (size / 2) - (8 * symbolScale);
+    const symbolOffsetY = (size / 2) - (8 * symbolScale);
 
-    // Scale the 16x16 icon path up to fit nicely inside the glowing halo
-    const symbolScale = Math.max(1.8, def.scale * 2.2);
-    const symbolOffset = 32 - (8 * symbolScale);
+    // Conflictly Aesthetic:
+    // Core dot: Highly opaque color
+    // Glow: Subtly visible, wide circle without complex radial interpolation
 
     const svg = [
         `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
-        `<defs>`,
-        // 1. Glowing Halo behind the marker
-        `<radialGradient id="${haloId}">`,
-        `<stop offset="0%" stop-color="${def.color}" stop-opacity="${glow}"/>`,
-        `<stop offset="40%" stop-color="${def.color}" stop-opacity="${(glow * 0.5).toFixed(2)}"/>`,
-        `<stop offset="100%" stop-color="${def.color}" stop-opacity="0"/>`,
-        `</radialGradient>`,
 
-        // 2. Glassmorphic / 3D Jewel Body Gradient (Diagonal lighting)
-        `<linearGradient id="${glassId}" x1="0%" y1="0%" x2="100%" y2="100%">`,
-        `<stop offset="0%" stop-color="${def.color}" stop-opacity="0.9"/>`,
-        `<stop offset="50%" stop-color="${def.color}" stop-opacity="0.6"/>`,
-        `<stop offset="100%" stop-color="#000000" stop-opacity="0.6"/>`,
-        `</linearGradient>`,
+        // 1. Soft Outer Glow Rings (solid colors + opacity instead of radial gradients which alias)
+        `<circle cx="32" cy="32" r="28" fill="${def.color}" fill-opacity="0.10"/>`,
+        `<circle cx="32" cy="32" r="20" fill="${def.color}" fill-opacity="0.25"/>`,
 
-        // 3. Crisp Metallic/Neon Edge Ring (Simulates light catching the rim)
-        `<linearGradient id="${ringId}" x1="0%" y1="0%" x2="0%" y2="100%">`,
-        `<stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>`,
-        `<stop offset="100%" stop-color="${sevColor}" stop-opacity="0.4"/>`,
-        `</linearGradient>`,
-        `</defs>`,
+        // 2. Crisp, Solid Inner Core
+        `<circle cx="32" cy="32" r="14" fill="${def.color}" fill-opacity="0.9"/>`,
 
-        // Render large blurred halo
-        `<circle cx="32" cy="32" r="30" fill="url(#${haloId})"/>`,
+        // 3. Very subtle bright edge/stroke around core
+        `<circle cx="32" cy="32" r="14" fill="none" stroke="${sevColor}" stroke-opacity="0.8" stroke-width="2"/>`,
 
-        // Render 3D Jewel Surface with Metallic Stroke
-        `<circle cx="32" cy="32" r="18" fill="url(#${glassId})" stroke="url(#${ringId})" stroke-width="1.5"/>`,
-
-        // Add Top Gloss Rays (Apple-style 3D specular shine)
-        `<ellipse cx="32" cy="20" rx="12" ry="5" fill="#ffffff" fill-opacity="0.25"/>`,
-        `<ellipse cx="32" cy="17" rx="6" ry="2" fill="#ffffff" fill-opacity="0.4"/>`,
-
-        // Render Symbol
-        `<g transform="translate(${symbolOffset}, ${symbolOffset}) scale(${symbolScale})">`,
+        // 4. Razor Sharp Vector Symbol
+        `<g transform="translate(${symbolOffsetX}, ${symbolOffsetY}) scale(${symbolScale})">`,
         def.symbol,
         `</g>`,
         `</svg>`,
@@ -211,7 +191,7 @@ const DarkBasemap: React.FC = () => {
         if (!viewer) return;
         viewer.imageryLayers.removeAll();
         const provider = new UrlTemplateImageryProvider({
-            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+            url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
             subdomains: ['a', 'b', 'c', 'd'],
             minimumLevel: 0,
             maximumLevel: 18,
@@ -294,7 +274,14 @@ const DhruvaGlobe: React.FC<DhruvaGlobeProps> = ({ events, enabledLayers, onEven
 
         for (const [type, layerEvents] of Object.entries(events)) {
             if (enabledLayers.has(type as EventType)) {
+                // News and coordinate-less events are handled by Tickers, not the globe
+                if (type === 'news') continue;
+
                 for (const event of layerEvents) {
+                    // Failsafe: only render actual geolocated points
+                    if (event.latitude === undefined || event.longitude === undefined) {
+                        continue;
+                    }
                     if (!seenIds.has(event.id)) {
                         seenIds.add(event.id);
                         result.push(event);
@@ -333,6 +320,35 @@ const DhruvaGlobe: React.FC<DhruvaGlobeProps> = ({ events, enabledLayers, onEven
                     const hasHeading = ["aircraft", "military_aircraft", "marine", "military_marine"].includes(event.type);
                     const headingDeg = hasHeading ? (event.metadata?.heading ?? 0) : 0;
                     const rotationObj = hasHeading ? headingDeg * (Math.PI / 180) : 0;
+
+                    if (event.type === 'notam') {
+                        // Create massive glowing restriction zone using EllipseGraphics
+                        const radiusMeters = (event.metadata?.radius_km || 200) * 1000;
+                        return (
+                            <Entity
+                                key={event.id}
+                                position={Cartesian3.fromDegrees(event.longitude, event.latitude)}
+                                name={event.title}
+                                description={event.description}
+                                onClick={() => onEventSelect(event)}
+                            >
+                                <EllipseGraphics
+                                    semiMajorAxis={radiusMeters}
+                                    semiMinorAxis={radiusMeters}
+                                    material={Color.fromCssColorString('#ef4444').withAlpha(0.2)}
+                                    fill={true}
+                                    outline={true}
+                                    outlineColor={Color.fromCssColorString('#dc2626').withAlpha(0.6)}
+                                    outlineWidth={2}
+                                />
+                                <BillboardGraphics
+                                    image={getMarkerImage(event.type, event.severity)}
+                                    verticalOrigin={VerticalOrigin.CENTER}
+                                    scale={0.5}
+                                />
+                            </Entity>
+                        );
+                    }
 
                     return (
                         <Entity

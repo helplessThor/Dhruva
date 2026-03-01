@@ -58,8 +58,6 @@ DHRUVA_GROQ_API_KEY=your_groq_api_key                # OSINT Text scraping & ver
 DHRUVA_ACLED_API_KEY=your_acled_key                  # ACLED Conflict Data
 DHRUVA_ACLED_EMAIL=your_email                        # ACLED Email
 DHRUVA_UCDP_API_TOKEN=your_ucdp_token                # UCDP Conflict Data
-DHRUVA_FLIGHTAWARE_API_KEY=your_flightaware_key      # Aircraft & Military Flight Tracking
-DHRUVA_POSITION_API_TOKEN=your_marine_token          # Marine / Navy Tracking
 DHRUVA_N2YO_API_KEY=your_n2yo_key                    # Live Satellite Tracking
 ```
 
@@ -82,7 +80,7 @@ Dhruva utilizes a decoupled architecture where Python Async Collectors constantl
 │                                                                      │
 │  ┌────────────┐  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐  │
 │  │ Earthquake │  │ Marine/Navy │  │ Satellites   │  │ UCDP/ACLED  │  │
-│  │ (USGS+OSINT)  │ (OpenSeaAPI)│  │ (N2YO API)   │  │ (APIs+OSINT)│  │
+│  │ (USGS+OSINT)  │ (AISStream) │  │ (N2YO API)   │  │ (APIs+OSINT)│  │
 │  └──────┬─────┘  └──────┬──────┘  └──────┬───────┘  └──────┬──────┘  │
 │         │               │                │                 │         │
 │         ▼               ▼                ▼                 ▼         │
@@ -117,8 +115,8 @@ Dhruva boasts 15 highly tuned tracking layers. OSINT scraping feeds intelligentl
 | 🌍 **Earthquakes** | USGS GeoJSON + Google RSS | Official API merged with AI-verified breaking OSINT |
 | ⚔️ **UCDP Conflicts**| UCDP Official API + RSS | Military clashes and casualties verified via LLM deduplication |
 | 🛡 **ACLED & CAST**| ACLED / CAST Datasets | Predictive Heatmaps & Real-time alert vectors |
-| ✈️ **Aircraft** | OpenSky / FlightAware | Dedicated High-Value Military Aircraft sorting and 3D rotation |
-| 🚢 **Marine / Naval** | PositionAPI / AIS | Dedicated High-Value Military, Carrier, & Oil Tanker visibility |
+| ✈️ **Aircraft** | OpenSky | Dedicated High-Value Military Aircraft sorting and 3D rotation |
+| 🚢 **Marine / Naval** | AISStream.io | Dedicated High-Value Military, Carrier, & Oil Tanker visibility |
 | 📡 **Outages** | IODA + nominatim OSM | Global tracking with intelligent dynamic OpenStreetMap geocoder |
 | 💻 **Cyber Attacks**| OSINT-TI | Real-time tracking of DDOS and network infiltration operations |
 | 🔥 **Active Fires** | NASA FIRMS | Forest fires & heat-anomalies |

@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import type { OsintEvent } from '../../types/events';
-import { SEVERITY_COLORS } from '../../types/events';
 
 interface AirTrafficViewProps {
     events: OsintEvent[];

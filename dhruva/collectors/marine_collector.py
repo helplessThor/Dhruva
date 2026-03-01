@@ -1,15 +1,12 @@
-"""Dhruva — Marine Traffic Collector (AISStream.io + position-api).
+"""Dhruva — Marine Traffic Collector (AISStream.io).
 
 Primary source: AISStream.io WebSocket for real-time AIS data.
-Supplementary source: position-api (localhost:5000) for open-ocean areas
-that AIS ground stations don't cover well.
 
 Features:
   - Real MMSI, vessel names, IMO numbers from AIS broadcasts
   - Live positions, speed, heading, course data
   - Global coverage across major shipping lanes
   - Stable vessel cache with deduplication by MMSI
-  - Open-ocean gap-filling via MarineTraffic position-api
   - Falls back to realistic mock data when API key is unavailable
 """
 
@@ -28,27 +25,6 @@ import httpx
 from collectors.base_collector import BaseCollector
 
 logger = logging.getLogger("dhruva.collector")
-
-# ── position-api configuration ─────────────────────────────────────
-# Set via env var or defaults to localhost:5000
-POSITION_API_URL = os.environ.get("DHRUVA_POSITION_API_URL", "http://localhost:5000")
-
-# MarineTraffic area codes for open-ocean regions (where AISStream has gaps)
-OCEAN_AREAS = [
-    "NOATL",   # North Atlantic (mid-ocean shipping lanes)
-    "NPAC",    # North Pacific (trans-Pacific routes)
-    "SPAC",    # South Pacific
-    "SIND",    # South Indian Ocean
-    "SAFR",    # South Africa / Cape route
-    "WAFR",    # West Africa / Gulf of Guinea to mid-Atlantic
-    "EAFR",    # East Africa / Indian Ocean coast
-    "ECSA",    # East Coast South America
-    "WCSA",    # West Coast South America
-    "ANT",     # Antarctica / Southern Ocean
-]
-
-# How often to poll position-api (seconds) — slower than AISStream
-POSITION_API_POLL_INTERVAL = 180  # 3 minutes
 
 # ── Load AISStream API key ─────────────────────────────────────────
 _KEY_FILE = Path(__file__).resolve().parent.parent / "AIS Ship API KEY.txt"
@@ -97,32 +73,27 @@ VESSEL_TYPE_MAP = {
 # AIS vessel type codes that are explicitly military/law-enforcement
 MILITARY_VESSEL_TYPE_CODES = {35, 55}  # 35 = Military, 55 = Law Enforcement
 
-# ── Military MMSI Prefix Ranges ────────────────────────────────────────────
-# MMSI is a 9-digit number. First 3 digits = MID (Maritime Identification Digit)
-# Certain MID ranges are assigned exclusively to military vessels.
-MILITARY_MMSI_PREFIXES: dict[str, list[str]] = {
-    "US Navy":          ["338", "369"],
-    "UK Royal Navy":    ["232", "233", "234", "235"],
-    "French Navy":      ["226", "227"],
-    "Russian Navy":     ["273"],
-    "Chinese PLAN":     ["412", "413"],
-    "Indian Navy":      ["419"],
-    "German Navy":      ["211"],
-    "Italian Navy":     ["247"],
-    "Spanish Navy":     ["224"],
-    "Australian Navy":  ["503"],
-    "Canadian Navy":    ["316"],
-    "Japanese MSDF":    ["431", "432", "433"],
-    "NATO/Unallocated": ["970", "972", "974"],
+# ── Military Name Prefixes ──────────────────────────────────────────────────
+# Many naval vessels report AIS with standard prefix designations in their ShipName.
+MILITARY_NAME_PREFIXES = {
+    "US Navy":          ["USS ", "USNS "],
+    "UK Royal Navy":    ["HMS ", "RFA "],
+    "French Navy":      ["FS ", "FNS "],
+    "Russian Navy":     ["RFS "],
+    "Chinese PLAN":     ["PLAN "],
+    "Indian Navy":      ["INS "],
+    "German Navy":      ["FGS "],
+    "Italian Navy":     ["ITS "],
+    "Australian Navy":  ["HMAS "],
+    "Canadian Navy":    ["HMCS "],
+    "Japanese MSDF":    ["JS "],
+    "Coast Guard":      ["USCGC ", "COAST GUARD", "CG "],
 }
 
-# Build flat set of prefixes for quick lookup
-_MIL_MMSI_PREFIX_SET: set[str] = set()
-_MIL_MMSI_PREFIX_NAVY: dict[str, str] = {}
-for _navy, _prefixes in MILITARY_MMSI_PREFIXES.items():
+_MIL_NAME_PREFIX_LIST = []
+for _navy, _prefixes in MILITARY_NAME_PREFIXES.items():
     for _p in _prefixes:
-        _MIL_MMSI_PREFIX_SET.add(_p)
-        _MIL_MMSI_PREFIX_NAVY[_p] = _navy
+        _MIL_NAME_PREFIX_LIST.append((_p, _navy))
 
 # ── Military Callsign Patterns ─────────────────────────────────────────────
 # US Navy ships: WNSP*, NATO ships start with specific prefixes
@@ -134,11 +105,11 @@ MILITARY_CALLSIGN_PATTERNS = [
 
 
 class MilitaryMarineDetector:
-    """Classify vessels as military based on MMSI, vessel type, and callsign.
+    """Classify vessels as military based on vessel type, name, and callsign.
 
     Detection layers (applied in order, any match = military):
       1. AIS vessel type code 35 (Military Operations) or 55 (Law Enforcement)
-      2. MMSI prefix matching known naval MMSI ranges
+      2. Name prefix matching known naval designations (USS, HMS, etc.)
       3. Callsign pattern matching
     """
 
@@ -147,12 +118,12 @@ class MilitaryMarineDetector:
         """Return (is_military, navy_label).
 
         Args:
-            vessel: Vessel dict from the internal cache (has mmsi, callsign, vessel_type_code, etc.)
+            vessel: Vessel dict from the internal cache (has name, callsign, vessel_type_code, etc.)
 
         Returns:
             (is_military: bool, label: str) — label is the navy name or reason
         """
-        mmsi = str(vessel.get("mmsi", ""))
+        name = str(vessel.get("name", "")).upper().strip()
         callsign = str(vessel.get("callsign", "")).upper().strip()
         vtype_code = int(vessel.get("vessel_type_code", 0) or 0)
 
@@ -161,11 +132,11 @@ class MilitaryMarineDetector:
             label = "Military Operations" if vtype_code == 35 else "Law Enforcement"
             return True, label
 
-        # Layer 2: MMSI prefix
-        if len(mmsi) >= 3:
-            prefix3 = mmsi[:3]
-            if prefix3 in _MIL_MMSI_PREFIX_SET:
-                return True, _MIL_MMSI_PREFIX_NAVY[prefix3]
+        # Layer 2: Name prefix heuristic
+        if name:
+            for prefix, navy in _MIL_NAME_PREFIX_LIST:
+                if name.startswith(prefix) or (prefix == "COAST GUARD" and prefix in name):
+                    return True, navy
 
         # Layer 3: callsign pattern
         if callsign:
@@ -296,7 +267,7 @@ class MarineCollector(BaseCollector):
     """
 
     AISSTREAM_URL = "wss://stream.aisstream.io/v0/stream"
-    MAX_VESSELS = 10000    # Increased cap to accommodate position-api vessels
+    MAX_VESSELS = 10000
     STALE_MINUTES = 60    # Drop vessels not seen for this many minutes
 
     def __init__(self, interval: int = 30):
@@ -310,11 +281,6 @@ class MarineCollector(BaseCollector):
         self._ais_task: asyncio.Task | None = None
         self._ais_connected = False
         self._mock_initialized = False
-        # position-api state
-        self._posapi_available: bool | None = None  # None = not checked yet
-        self._posapi_last_poll: float = 0.0
-        self._posapi_area_idx: int = 0  # Round-robin through OCEAN_AREAS
-        self._posapi_vessel_count: int = 0
 
     async def collect(self) -> list[dict]:
         if self._use_aisstream:
@@ -323,19 +289,15 @@ class MarineCollector(BaseCollector):
                 self._ais_task = asyncio.create_task(self._ais_listener())
                 logger.info("[marine] Started AISStream.io background listener")
 
-            # Supplement with position-api for open-ocean coverage
-            await self._poll_position_api()
-
             # Prune stale vessels
             self._prune_stale()
 
             # Convert cache to events
             events = self._cache_to_events()
-            ais_count = sum(1 for e in events if e.get("source") == "AISStream.io")
-            pos_count = sum(1 for e in events if e.get("source") == "MarineTraffic (position-api)")
+            ais_count = len(events)
             logger.info(
-                "[marine] Tracking %d vessels (AISStream: %d, position-api: %d)",
-                len(events), ais_count, pos_count
+                "[marine] Tracking %d vessels (AISStream: %d)",
+                len(events), ais_count
             )
             return events
         else:
@@ -481,136 +443,6 @@ class MarineCollector(BaseCollector):
         if stale:
             logger.debug("[marine] Pruned %d stale vessels", len(stale))
 
-    # ── position-api supplementary polling ─────────────────────────
-    async def _poll_position_api(self):
-        """Poll position-api for open-ocean vessels (round-robin by area)."""
-        now = _time.monotonic()
-
-        # Respect poll interval
-        if now - self._posapi_last_poll < POSITION_API_POLL_INTERVAL:
-            return
-
-        # Check availability on first call
-        if self._posapi_available is None:
-            try:
-                async with httpx.AsyncClient(timeout=5) as client:
-                    resp = await client.get(f"{POSITION_API_URL}/")
-                    self._posapi_available = resp.status_code < 500
-            except Exception:
-                self._posapi_available = False
-
-            if self._posapi_available:
-                logger.info("[marine] position-api detected at %s", POSITION_API_URL)
-            else:
-                logger.info(
-                    "[marine] position-api not available at %s — "
-                    "using AISStream only. To enable: "
-                    "cd position-api && npm start",
-                    POSITION_API_URL,
-                )
-                return
-
-        if not self._posapi_available:
-            return
-
-        # Pick next area (round-robin 2 areas per poll for coverage)
-        areas_to_fetch = []
-        for _ in range(2):
-            areas_to_fetch.append(OCEAN_AREAS[self._posapi_area_idx])
-            self._posapi_area_idx = (self._posapi_area_idx + 1) % len(OCEAN_AREAS)
-
-        area_str = ",".join(areas_to_fetch)
-        url = f"{POSITION_API_URL}/legacy/getVesselsInArea/{area_str}"
-
-        try:
-            async with httpx.AsyncClient(timeout=60) as client:
-                resp = await client.get(url)
-                if resp.status_code != 200:
-                    logger.debug("[marine] position-api returned %d for %s", resp.status_code, area_str)
-                    self._posapi_last_poll = now
-                    return
-
-                data = resp.json()
-                if not isinstance(data, list):
-                    logger.debug("[marine] position-api unexpected response type: %s", type(data))
-                    self._posapi_last_poll = now
-                    return
-
-            added = 0
-            for vessel in data:
-                try:
-                    mmsi = str(vessel.get("mmsi", "") or "")
-                    lat = vessel.get("lat")
-                    lon = vessel.get("lon")
-
-                    if not mmsi or lat is None or lon is None:
-                        continue
-                    lat = float(lat)
-                    lon = float(lon)
-                    if abs(lat) < 0.01 and abs(lon) < 0.01:
-                        continue
-
-                    # Only add if NOT already in cache from AISStream
-                    # (AISStream data is fresher/real-time)
-                    if mmsi in self._vessel_cache:
-                        existing = self._vessel_cache[mmsi]
-                        if existing.get("_source") == "aisstream":
-                            continue  # AISStream takes priority
-
-                    name = str(vessel.get("name", "") or "").strip()
-                    speed = float(vessel.get("speed", 0) or 0)
-                    vtype = str(vessel.get("type", "Vessel") or "Vessel")
-                    imo_raw = vessel.get("imo", "")
-                    imo = f"IMO{imo_raw}" if imo_raw and str(imo_raw) not in ("0", "") else ""
-                    callsign = str(vessel.get("callsign", "") or "").strip()
-                    destination = str(vessel.get("destination", "") or "").strip()
-                    area = str(vessel.get("area", "") or "").strip()
-                    country = str(vessel.get("country", "") or "").strip()
-
-                    self._vessel_cache[mmsi] = {
-                        "mmsi": mmsi,
-                        "lat": round(lat, 5),
-                        "lon": round(lon, 5),
-                        "sog": round(speed, 1),
-                        "cog": 0,
-                        "heading": 511,  # Not available from position-api
-                        "nav_status": 15,
-                        "nav_status_text": "Not defined",
-                        "name": name if name else "",
-                        "vessel_type": vtype,
-                        "imo": imo,
-                        "callsign": callsign,
-                        "destination": destination,
-                        "updated": datetime.now(timezone.utc),
-                        "_source": "posapi",
-                        "_area": area,
-                        "_country": country,
-                    }
-                    added += 1
-
-                except Exception as e:
-                    logger.debug("[marine] position-api vessel parse error: %s", e)
-                    continue
-
-            self._posapi_vessel_count = sum(
-                1 for v in self._vessel_cache.values() if v.get("_source") == "posapi"
-            )
-            if added > 0:
-                logger.info(
-                    "[marine] position-api: +%d vessels from %s (total posapi: %d)",
-                    added, area_str, self._posapi_vessel_count
-                )
-
-        except httpx.ConnectError:
-            # position-api went down
-            if self._posapi_available:
-                logger.warning("[marine] position-api connection lost — will retry")
-            self._posapi_available = None  # Re-check next time
-        except Exception as e:
-            logger.warning("[marine] position-api fetch error: %s", e)
-
-        self._posapi_last_poll = now
-
     def _cache_to_events(self) -> list[dict]:
         """Convert vessel cache to OsintEvent list.
 
@@ -662,7 +494,7 @@ class MarineCollector(BaseCollector):
             if imo:
                 desc_parts.append(imo)
 
-            source = "MarineTraffic (position-api)" if v.get("_source") == "posapi" else "AISStream.io"
+            source = "AISStream.io"
             if is_military:
                 source = f"AIS Military ({mil_label})"
 

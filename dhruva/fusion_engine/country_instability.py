@@ -4,7 +4,7 @@ Computes a 0-100 instability score for monitored countries by
 aggregating real event signals from all active data layers.
 
 Signal Weights:
-  - Active conflict nearby (acled + ucdp + gdelt_conflict): 30%
+  - Active conflict nearby (acled + ucdp):                          30%
   - Military aircraft + vessel activity:                    20%
   - Fire / disaster events:                                 15%
   - Protest events:                                         20%
@@ -68,7 +68,7 @@ EVENT_RADIUS_DEG = 5.0
 
 # Weight configuration (must sum to 1.0)
 WEIGHTS = {
-    "conflict":  0.30,   # acled + ucdp + gdelt_conflict
+    "conflict":  0.30,   # acled + ucdp
     "military":  0.20,   # military + military_aircraft + military_marine
     "disaster":  0.15,   # fire + earthquake
     "protest":   0.20,   # protest
@@ -77,7 +77,7 @@ WEIGHTS = {
 
 # Event types contributing to each signal bucket
 SIGNAL_BUCKETS = {
-    "conflict":  {"acled", "ucdp", "gdelt_conflict", "conflict"},
+    "conflict":  {"acled", "ucdp", "conflict"},
     "military":  {"military", "military_aircraft", "military_marine"},
     "disaster":  {"fire", "earthquake"},
     "protest":   {"protest"},

@@ -65,8 +65,9 @@ MILITARY_TYPE_CODES: set[str] = {
     "A10", "AC130",
     # ISR / SIGINT
     "E3", "E8", "E6", "U2", "TR1", "RC135", "EP3",
-    # UAS
-    "RQ4", "MQ9", "MQ1", "RQ7",
+    # UAS / Drones
+    "RQ4", "MQ9", "MQ1", "RQ7", "MQ4", "MQ8", "MQ25", "HERON", "TB2", 
+    "AKINCI", "EITAN", "SHAHED", "WING LOONG", "CH4", "YABHON", "ANKA",
     # Rotary
     "MH60", "UH60", "CH47", "AH64", "AH1",
     # V/STOL
@@ -105,6 +106,7 @@ MILITARY_OWNER_KEYWORDS: list[str] = [
     "french navy", "marine nationale",
     "nato",
     "national security",
+    "uav", "unmanned", "drone", "rpas"
 ]
 
 # ── Callsign prefixes (reliable for Western/NATO, limited for others) ────
@@ -516,6 +518,14 @@ class MilitaryAircraftDetector:
 
             mil_label = owner or _infer_mil_label(icao24, callsign)
 
+            # Detect if it's a drone based on type code or owner string
+            is_drone = False
+            ac_type_upper = ac_type.upper()
+            owner_upper = owner.upper()
+            drone_keywords = ["UAV", "UNMANNED", "DRONE", "RPAS", "RQ", "MQ", "HERON", "TB2", "AKINCI", "SHED"]
+            if any(k in ac_type_upper or k in owner_upper for k in drone_keywords):
+                is_drone = True
+
             military.append({
                 "id": f"mil-air-{icao24 or callsign}",
                 "type": "military_aircraft",
@@ -524,7 +534,7 @@ class MilitaryAircraftDetector:
                 "severity": 3 if detection_source == "CONFIRMED" else 2,
                 "timestamp": event.get("timestamp", now.isoformat()),
                 "source": f"ADS-B + hexdb.io [{detection_source}]",
-                "title": f"Military Aircraft — {callsign or icao24.upper()}",
+                "title": f"Military {'Drone/UAV' if is_drone else 'Aircraft'} — {callsign or icao24.upper()}",
                 "description": (
                     f"{detection_source}: {confidence} · "
                     f"{event.get('description', '')}"
@@ -533,6 +543,7 @@ class MilitaryAircraftDetector:
                     "detection_source": detection_source,
                     "detection_confidence": confidence,
                     "military_label": mil_label,
+                    "is_drone": is_drone,
                     "registered_owner": owner,
                     "aircraft_type": ac_type,
                     "callsign": callsign,
