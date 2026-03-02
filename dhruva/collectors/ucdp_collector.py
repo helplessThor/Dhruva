@@ -37,9 +37,13 @@ CONFLICT_KEYWORDS = [
     "pak afghan border", "pakistan army clash", "afghan border clash", "ttp attack",
     "line of control", "loc firing", "cross loc", "ceasefire violation", 
     "gaza strike", "idf strike", "hamas rocket", "hezbollah rocket", "lebanon strike",
-    "ukraine drone", "russian strike", "kyiv attack", "moscow drone",
-    "myanmar junta drill", "rsf clash", "houthi rebel", "red sea ship attack",
-    "cartel clash", "gang violence", "narco shootout", "gun battle",
+    "cartel clash", "gang violence", "narco shootout", "gun battle", "chemical leak",
+    "gas leak", "toxic gas leak", "chemical spill", "toxic spill", "industrial accident",
+    "chemical plant", "chemical factory", "chemical explosion", "chemical fire",
+    
+    # India Specific Hotspots
+    "maoist encounter", "naxal attack", "kashmir militant", "manipur clash", "assam border dispute",
+    "kuki zo clash", "meitei clash", "jk gunfight", "jk infiltration", "bsf firing"
 ]
 
 RSS_FEEDS = [

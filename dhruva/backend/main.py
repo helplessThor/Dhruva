@@ -82,7 +82,6 @@ event_store: dict[str, list[dict]] = {
     "satellite": [],
     "notam": [],
     "news": [],
-    "news": [],
 }
 current_risk: dict = {"level": 1, "label": "NOMINAL", "color": "#00ff88"}
 

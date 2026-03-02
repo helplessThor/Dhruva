@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     cyber_interval: int = 120
     outage_interval: int = 1800
     economic_interval: int = 300
-    military_interval: int = 120
+    military_interval: int = 60
     ucdp_interval: int = 120
     acled_interval: int = 3600
     naval_interval: int = 3600

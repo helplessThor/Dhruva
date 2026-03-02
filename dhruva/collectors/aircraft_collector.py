@@ -189,29 +189,51 @@ class AircraftCollector(BaseCollector):
 
     # Search regions for optimized continental coverage (lat_min, lat_max, lon_min, lon_max, label)
     # Using targeted "sniper boxes" prevents APIs from silently truncating massive oceanic bounding boxes.
-    SEARCH_REGIONS = [
-        # ── High-Density Continental Core ──
-        ( 25,  50, -125,  -70, "North America"),
-        ( 35,  60,  -10,   30, "Europe Core"),
-        ( 10,  35,   70,   95, "South Asia / India"),
-        ( 20,  45,  100,  145, "East Asia / China / Japan"),
+    # SEARCH_REGIONS = [
+    #     # ── High-Density Continental Core ──
+    #     ( 25,  50, -125,  -70, "North America"),
+    #     ( 35,  60,  -10,   30, "Europe Core"),
+    #     ( 10,  35,   70,   95, "South Asia / India"),
+    #     ( 20,  45,  100,  145, "East Asia / China / Japan"),
         
-        # ── The User-Requested Gaps ──
-        ( 45,  70,   30,   90, "Western Russia / Urals"),     # Added specific Russian coverage
-        ( 45,  70,   90,  180, "Eastern Russia / Siberia"),   # Splitting Russia into 2 boxes prevents truncation
-        ( 10,  35,   35,   65, "Middle East / Gulf"),         # Refined Middle East box
-        (-35,   5,   10,   50, "Central & South Africa"),     # Split Africa to dive deeper
-        (  5,  35,  -20,   35, "North Africa / Sahara"),      # North Africa specific
-        (-55,  15,  -80,  -35, "South America Core"),         # South America
+    #     # ── The User-Requested Gaps ──
+    #     ( 45,  70,   30,   90, "Western Russia / Urals"),     # Added specific Russian coverage
+    #     ( 45,  70,   90,  180, "Eastern Russia / Siberia"),   # Splitting Russia into 2 boxes prevents truncation
+    #     ( 10,  35,   35,   65, "Middle East / Gulf"),         # Refined Middle East box
+    #     (-35,   5,   10,   50, "Central & South Africa"),     # Split Africa to dive deeper
+    #     (  5,  35,  -20,   35, "North Africa / Sahara"),      # North Africa specific
+    #     (-55,  15,  -80,  -35, "South America Core"),         # South America
         
-        # ── Extended Peripheral Zones ──
-        ( -5,  25,   95,  140, "Southeast Asia"),
-        (-15,  30,  -90,  -55, "Central America / Caribbean"),
-        (-45, -10,  110,  155, "Australia"),
-        (-45,   0,  155,  180, "New Zealand / Oceania"),
-        ( 50,  70, -165, -130, "Alaska / Bering Sea"),
-    ]
+    #     # ── Extended Peripheral Zones ──
+    #     ( -5,  25,   95,  140, "Southeast Asia"),
+    #     (-15,  30,  -90,  -55, "Central America / Caribbean"),
+    #     (-45, -10,  110,  155, "Australia"),
+    #     (-45,   0,  155,  180, "New Zealand / Oceania"),
+    #     ( 50,  70, -165, -130, "Alaska / Bering Sea"),
+    # ]
 
+    SEARCH_REGIONS = [
+    # ── Northern Hemisphere ──
+    ( 30,  90, -180, -120, "North Pacific / Alaska / Arctic"),
+    ( 30,  90, -120,  -60, "North America / Arctic"),
+    ( 30,  90,  -60,    0, "North Atlantic / Greenland / Arctic"),
+    ( 30,  90,    0,   60, "Europe / West Russia / Arctic"),
+    ( 30,  90,   60,  120, "Central & East Russia / Arctic"),
+    ( 30,  90,  120,  180, "North Pacific / Far East Russia / Arctic"),
+
+    # ── Equatorial Belt ──
+    (-30,  30, -180, -120, "Central Pacific Ocean"),
+    (-30,  30, -120,  -60, "Americas Tropical"),
+    (-30,  30,  -60,    0, "Atlantic Tropical"),
+    (-30,  30,    0,   60, "Africa / Middle East"),
+    (-30,  30,   60,  120, "South & Southeast Asia"),
+    (-30,  30,  120,  180, "Indonesia / West Pacific"),
+
+    # ── Southern Hemisphere ──
+    (-90, -30, -180,  -60, "South Pacific / Southern Ocean"),
+    (-90, -30,  -60,   60, "South America / South Atlantic / Africa"),
+    (-90, -30,   60,  180, "Indian Ocean / Australia / Antarctica"),
+    ]
     def __init__(self, interval: int = 30):
         super().__init__(name="aircraft", interval=max(interval, self.COLLECTION_INTERVAL))
         self._osky_region_index = 0    # OpenSky region rotation (offset for coverage)

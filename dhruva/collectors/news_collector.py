@@ -22,18 +22,19 @@ logger = logging.getLogger("dhruva.news")
 RSS_FEEDS = [
     "https://www.aljazeera.com/xml/rss/all.xml",
     "http://feeds.bbci.co.uk/news/world/rss.xml",
-    # Conflict/Geo-politics specific feeds can be added here
+    "https://www.thehindu.com/news/national/feeder/default.rss",
 ]
 
 # Keywords to strictly filter out sports news
 SPORTS_KEYWORDS = {
     "sport", "football", "tennis", "cricket", "basketball", 
     "olympics", "championship", "tournament", "soccer", "rugby",
-    "premier league", "nhl", "nfl", "nba", "fifa", "uefa", "wimbledon", "t20"
+    "premier league", "nhl", "nfl", "nba", "fifa", "uefa", "wimbledon", "t20", "why", "festival",
+    "festive",
 }
 
 # Max number of headlines to return to the ticker
-MAX_HEADLINES = 10
+MAX_HEADLINES = 40
 
 # Threshold for fuzzy string matching (0.0 to 1.0). 
 # If two headlines are > 50% similar in text structure, we drop the older one.
@@ -107,7 +108,7 @@ class NewsCollector(BaseCollector):
                                 dt = dt.replace(tzinfo=timezone.utc)
                             
                             age_seconds = (datetime.now(timezone.utc) - dt).total_seconds()
-                            if age_seconds > 86400: # 24 hours freshness limit instead of 10 min to guarantee 10 items
+                            if age_seconds > 43200: # 12 hour freshness limit to guarantee 10 items
                                 continue
                             item_timestamp = dt.isoformat()
                         except Exception:
@@ -116,7 +117,7 @@ class NewsCollector(BaseCollector):
                             pass
 
                     # Normalize source name from feed URL
-                    source = "BBC" if "bbci.co.uk" in feed_url else "Al Jazeera" if "aljazeera" in feed_url else "News"
+                    source = "BBC" if "bbci.co.uk" in feed_url else "Al Jazeera" if "aljazeera" in feed_url else "The Hindu" if "thehindu" in feed_url else "News"
 
                     all_items.append({
                         "id": f"news-{hash(title)}",
