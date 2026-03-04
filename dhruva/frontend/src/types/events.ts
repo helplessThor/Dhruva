@@ -73,7 +73,6 @@ export const LAYER_CONFIGS: LayerConfig[] = [
     { id: 'marine', label: 'Marine Tracking', icon: 'marine', color: '#0077cc', enabled: true },
     { id: 'cyber', label: 'Cyber Attacks', icon: 'cyber', color: '#9333ea', enabled: false },
     { id: 'outage', label: 'Outages', icon: 'outage', color: '#f59e0b', enabled: true },
-    { id: 'economic', label: 'Economic', icon: 'economic', color: '#10b981', enabled: false },
     { id: 'military', label: 'Military Zones', icon: 'military', color: '#4ade80', enabled: false },
     { id: 'military_aircraft', label: 'Military Aircraft', icon: 'military_aircraft', color: '#a3e635', enabled: true },
     { id: 'military_marine', label: 'Military Vessels', icon: 'marine', color: '#3b82f6', enabled: true },
@@ -83,5 +82,4 @@ export const LAYER_CONFIGS: LayerConfig[] = [
     { id: 'naval', label: 'Naval Deployments', icon: 'marine', color: '#3b82f6', enabled: true },
     { id: 'satellite', label: 'Live Satellites', icon: 'satellite', color: '#cbd5e1', enabled: false },
     { id: 'notam', label: 'Airspace Closures', icon: 'military_aircraft', color: '#ef4444', enabled: true },
-    { id: 'news', label: 'Global News', icon: 'acled', color: '#ffffff', enabled: true },
 ];

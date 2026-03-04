@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     fire_interval: int = 600
     conflict_interval: int = 1800
     aircraft_interval: int = 30
-    marine_interval: int = 180
+    marine_interval: int = 300
     cyber_interval: int = 120
     outage_interval: int = 1800
     economic_interval: int = 300
