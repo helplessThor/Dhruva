@@ -17,7 +17,6 @@ TYPE_WEIGHTS = {
     "military": 2.5,
     "ucdp": 2.0,
     "acled": 2.0,
-    "intel_hotspot": 0.5,
 }
 
 RISK_LEVELS = {

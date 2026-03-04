@@ -22,7 +22,6 @@ from datetime import datetime, timezone
 
 from fusion_engine.normalizer import normalize_batch, deduplicate_osint_batch
 from fusion_engine.risk_calculator import calculate_risk
-from fusion_engine.intel_hotspot_engine import compute_hotspots, compute_convergence_alerts
 from fusion_engine.country_instability import compute_cii
 from backend.market_data import market_data_loop, get_market_data
 
@@ -76,8 +75,6 @@ event_store: dict[str, list[dict]] = {
     "acled_cast": [],
     "naval": [],
     "protest": [],
-    "intel_hotspot": [],
-    "convergence": [],
     "cii": [],
     "satellite": [],
     "notam": [],
@@ -122,26 +119,6 @@ HOTSPOT_TRIGGER_LAYERS = {
 def _recompute_fusion():
     """Recompute hotspots, convergence alerts, and CII from current event_store."""
     global _cii_cache
-
-    # ── Intel Hotspots ──────────────────────────────
-    try:
-        hotspots = compute_hotspots(event_store)
-        hotspot_normalized = normalize_batch(hotspots)
-        event_store["intel_hotspot"] = hotspot_normalized
-        if hotspots:
-            data_freshness["intel_hotspot"] = datetime.now(timezone.utc).isoformat()
-    except Exception as e:
-        logger.debug("Hotspot computation error: %s", e)
-
-    # ── Convergence Alerts ──────────────────────────
-    try:
-        convergence = compute_convergence_alerts(event_store)
-        conv_normalized = normalize_batch(convergence)
-        event_store["convergence"] = conv_normalized
-        if convergence:
-            data_freshness["convergence"] = datetime.now(timezone.utc).isoformat()
-    except Exception as e:
-        logger.debug("Convergence computation error: %s", e)
 
     # ── Country Instability Index ───────────────────
     try:
@@ -217,12 +194,6 @@ async def run_collector(collector):
             
             # Recompute fusion since acled data just arrived
             _recompute_fusion()
-            await ws_manager.broadcast({
-                "action": "event_batch",
-                "layer": "intel_hotspot",
-                "data": event_store.get("intel_hotspot", []),
-                "risk": current_risk,
-            })
             continue  # Skip generic processing
             
         # ── ACLED CAST: handle predictive alerts ─────────────────────
@@ -248,12 +219,6 @@ async def run_collector(collector):
             
             # Trigger hotspot recomputation
             _recompute_fusion()
-            await ws_manager.broadcast({
-                "action": "event_batch",
-                "layer": "intel_hotspot",
-                "data": event_store.get("intel_hotspot", []),
-                "risk": current_risk,
-            })
             continue
             
         # ── Naval & UCDP Scrapers: Broadcast on native layer ────
@@ -279,12 +244,6 @@ async def run_collector(collector):
             })
             
             _recompute_fusion()
-            await ws_manager.broadcast({
-                "action": "event_batch",
-                "layer": "intel_hotspot",
-                "data": event_store.get("intel_hotspot", []),
-                "risk": current_risk,
-            })
             continue  # Skip generic processing
 
         # ── News Ticker bypass (No fusion, no map points) ────────────
@@ -368,18 +327,6 @@ async def run_collector(collector):
         # Recompute fusion after qualifying layer updates
         if etype in HOTSPOT_TRIGGER_LAYERS:
             _recompute_fusion()
-            await ws_manager.broadcast({
-                "action": "event_batch",
-                "layer": "intel_hotspot",
-                "data": event_store.get("intel_hotspot", []),
-                "risk": current_risk,
-            })
-            await ws_manager.broadcast({
-                "action": "event_batch",
-                "layer": "convergence",
-                "data": event_store.get("convergence", []),
-                "risk": current_risk,
-            })
 
         # Publish to stream
         await stream_manager.publish_batch(normalized)

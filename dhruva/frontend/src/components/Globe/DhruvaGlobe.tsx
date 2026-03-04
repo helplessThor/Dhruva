@@ -11,7 +11,7 @@ import {
     Color,
     NearFarScalar,
     VerticalOrigin,
-    UrlTemplateImageryProvider,
+    ArcGisMapServerImageryProvider,
 } from 'cesium';
 import type { OsintEvent, EventType } from '../../types/events';
 import { SEVERITY_COLORS, LAYER_CONFIGS } from '../../types/events';
@@ -103,16 +103,6 @@ const MARKER_DEFS: Record<EventType, { color: string; symbol: string; scale: num
         symbol: '<path d="M2 10l1-5h8l2 5z" fill="#fff" opacity="0.8" /><path d="M4 5V3h4v2" fill="none" stroke="#fff" stroke-width="1.5" /><path d="M1 12c2 1 4-1 6 0s4 1 6 0 2-1 2-1" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />',
         scale: 1.1,
     },
-    intel_hotspot: {
-        color: '#fbbf24',
-        symbol: '<path d="M2 8c0 0 3-4 6-4s6 4 6 4-3 4-6 4-6-4-6-4z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="8" r="2.5" fill="#fff" /><path d="M8 2v1M8 13v1M2 8H1M15 8h-1" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.4" stroke-linecap="round" />',
-        scale: 1,
-    },
-    convergence: {
-        color: '#dc2626',
-        symbol: '<path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3M4 4l1.5 1.5M12 12l-1.5-1.5M12 4L10.5 5.5M4 12l1.5-1.5" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" /><circle cx="8" cy="8" r="2" fill="#fff" />',
-        scale: 1.2,
-    },
     satellite: {
         color: '#cbd5e1',
         symbol: '<ellipse cx="8" cy="8" rx="6" ry="2" fill="none" stroke="#fff" stroke-width="1.5" transform="rotate(-30 8 8)" /><circle cx="8" cy="8" r="3" fill="#fff" />',
@@ -189,15 +179,28 @@ const DarkBasemap: React.FC = () => {
 
     useEffect(() => {
         if (!viewer) return;
-        viewer.imageryLayers.removeAll();
-        const provider = new UrlTemplateImageryProvider({
-            url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
-            subdomains: ['a', 'b', 'c', 'd'],
-            minimumLevel: 0,
-            maximumLevel: 18,
-            credit: '© CartoDB © OpenStreetMap contributors',
-        });
-        viewer.imageryLayers.addImageryProvider(provider);
+
+        const initSatelliteBasemap = async () => {
+            try {
+                const provider = await ArcGisMapServerImageryProvider.fromUrl(
+                    'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
+                    { enablePickFeatures: false }
+                );
+
+                viewer.imageryLayers.removeAll();
+                const layer = viewer.imageryLayers.addImageryProvider(provider);
+
+                // Apply color filters to get the "dark mode" satellite vibe
+                layer.brightness = 0.35;
+                layer.saturation = 0.3;
+                layer.contrast = 1.2;
+                layer.gamma = 0.8;
+            } catch (err) {
+                console.error('Failed to load satellite basemap:', err);
+            }
+        };
+
+        initSatelliteBasemap();
     }, [viewer]);
 
     return null;

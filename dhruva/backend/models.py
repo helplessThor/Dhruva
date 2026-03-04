@@ -24,8 +24,6 @@ class EventType(str, Enum):
     ACLED = "acled"
     ACLED_CAST = "acled_cast"
     NAVAL = "naval"
-    INTEL_HOTSPOT = "intel_hotspot"
-    CONVERGENCE = "convergence"
     SATELLITE = "satellite"
     NOTAM = "notam"
 
@@ -78,8 +76,6 @@ class LayerState(BaseModel):
     acled: bool = True
     acled_cast: bool = True
     naval: bool = True
-    intel_hotspot: bool = True
-    convergence: bool = True
     satellite: bool = False
     notam: bool = True
 

@@ -27,8 +27,6 @@ export type EventType =
     | 'acled'
     | 'acled_cast'
     | 'naval'
-    | 'intel_hotspot'
-    | 'convergence'
     | 'satellite'
     | 'notam'
     | 'news';
@@ -83,8 +81,6 @@ export const LAYER_CONFIGS: LayerConfig[] = [
     { id: 'acled', label: 'ACLED Events', icon: 'acled', color: '#f97316', enabled: true },
     { id: 'acled_cast', label: 'Predicted Conflict Alert', icon: 'acled', color: '#fbbf24', enabled: true },
     { id: 'naval', label: 'Naval Deployments', icon: 'marine', color: '#3b82f6', enabled: true },
-    { id: 'intel_hotspot', label: 'Intel Hotspots', icon: 'intel_hotspot', color: '#fbbf24', enabled: true },
-    { id: 'convergence', label: 'Multi-Domain Convergence', icon: 'intel_hotspot', color: '#dc2626', enabled: true },
     { id: 'satellite', label: 'Live Satellites', icon: 'satellite', color: '#cbd5e1', enabled: false },
     { id: 'notam', label: 'Airspace Closures', icon: 'military_aircraft', color: '#ef4444', enabled: true },
     { id: 'news', label: 'Global News', icon: 'acled', color: '#ffffff', enabled: true },

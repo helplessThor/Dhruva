@@ -27,14 +27,30 @@ RSS_FEEDS = [
 
 # Keywords to strictly filter out sports news
 SPORTS_KEYWORDS = {
-    "sport", "football", "tennis", "cricket", "basketball", 
-    "olympics", "championship", "tournament", "soccer", "rugby",
-    "premier league", "nhl", "nfl", "nba", "fifa", "uefa", "wimbledon", "t20", "why", "festival",
-    "festive",
+    "sport", "sports", "football", "soccer", "tennis", "cricket", "basketball",
+    "baseball", "golf", "rugby", "hockey", "volleyball", "badminton", "boxing",
+    "mma", "ufc", "f1", "formula 1", "motogp", "racing", "grand prix",
+    "olympics", "paralympics", "championship", "tournament", "league", "cup final",
+    "world cup", "premier league", "la liga", "serie a", "bundesliga", "ipl", "psl",
+    "big bash", "ranji", "ashes", "test match", "odi", "t20", "t20i",
+    "nhl", "nfl", "nba", "mlb", "fifa", "uefa", "wimbledon", "super bowl",
+    "matchday", "qualifier", "semifinal", "semi-final", "final", "playoff", "knockout",
+    "goal", "hat-trick", "captain", "coach", "striker", "midfielder", "goalkeeper", "festive", "festival",
+    "why", "how", "what"
+}
+
+# High-impact catastrophic keywords to filter local news
+CATASTROPHIC_KEYWORDS = {
+    "war", "conflict", "explosion", "blast", "leak", "toxic", "chemical", "strike",
+    "attack", "crash", "casualty", "dead", "killed", "missile", "rocket", "drone",
+    "military", "clash", "riot", "protest", "unrest", "assassination", "coup",
+    "earthquake", "tsunami", "terror", "militant", "gunfight", "naxal", "maoist",
+    "encounter", "hijack", "hostage", "shelling", "airstrike", "cross-border",
+    "insurgency", "evacuation", "blackout", "state of emergency"
 }
 
 # Max number of headlines to return to the ticker
-MAX_HEADLINES = 40
+MAX_HEADLINES = 30
 
 # Threshold for fuzzy string matching (0.0 to 1.0). 
 # If two headlines are > 50% similar in text structure, we drop the older one.
@@ -99,6 +115,11 @@ class NewsCollector(BaseCollector):
                     if any(kw in text_to_check for kw in SPORTS_KEYWORDS):
                         continue
                         
+                    # For The Hindu (India), strictly require catastrophic/escalatory keywords
+                    if "thehindu" in feed_url:
+                        # Need regex boundaries or simple substring. Substring is fine.
+                        if not any(kw in text_to_check for kw in CATASTROPHIC_KEYWORDS):
+                            continue
                     # Parse PubDate and enforce strict 5-minute freshness
                     item_timestamp = now
                     if pub_date_str:
@@ -108,7 +129,7 @@ class NewsCollector(BaseCollector):
                                 dt = dt.replace(tzinfo=timezone.utc)
                             
                             age_seconds = (datetime.now(timezone.utc) - dt).total_seconds()
-                            if age_seconds > 43200: # 12 hour freshness limit to guarantee 10 items
+                            if age_seconds > 7200: # 2 hour freshness limit to guarantee 10 items
                                 continue
                             item_timestamp = dt.isoformat()
                         except Exception:

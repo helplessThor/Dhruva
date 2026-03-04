@@ -58,7 +58,7 @@ class UCDPCollector(BaseCollector):
     """Integrates BOTH Official UCDP API and live OSINT Conflict Scraping."""
 
     # Articles older than this are ignored by OSINT Scraper
-    FRESHNESS_HOURS = 48
+    FRESHNESS_HOURS = 12
     OSINT_THROTTLE_SECONDS = 120
 
     def __init__(self, interval: int = 30):
@@ -349,7 +349,8 @@ class UCDPCollector(BaseCollector):
         # Strip publisher suffix first to prevent it from tricking the regex match
         clean_title = re.split(r'\s-\s|\s\|\s', title)[0]
         
-        m_loc = re.search(r"(?:in|near|of|strikes|hits|at|off|for)\s([A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)*)", clean_title)
+        # Prevent matching locations of administrative bodies (e.g., "Authority of Sri Lanka", "Bank of England")
+        m_loc = re.search(r"(?<!Authority\s)(?<!Government\s)(?<!Ministry\s)(?<!Bank\s)(?<!Court\s)(?:in|near|of|strikes|hits|at|off|for)\s([A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)*)", clean_title)
         if m_loc:
             candidate = m_loc.group(1).strip()
             if len(candidate) > 2 and candidate.lower() not in {"the", "a", "an", "new", "report", "video", "middle east"}:

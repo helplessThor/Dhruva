@@ -264,17 +264,21 @@ class EarthquakeCollector(BaseCollector):
         return osint_results
     async def _async_extract_earthquake_coords(self, title: str) -> tuple[float, float, str, float]:
         """Smart heuristics for earthquake extraction [lat, lon, location_name, mag] using NLP offline geocoding."""
-        text = title.lower()
-        mag = 4.0 # default
         import re
+        
+        # Strip publisher suffix first to prevent it from tricking the regex match (e.g. " - The Times of India")
+        clean_title = re.split(r'\s-\s|\s\|\s', title)[0]
+        text = clean_title.lower()
+        mag = 4.0 # default
+        
         m_mag = re.search(r"magnitude\s+([\d\.]+)", text) or re.search(r"m\s?([\d\.]+)", text)
         if m_mag:
             try: mag = float(m_mag.group(1))
             except: pass
             
         # 1. Attempt strict Entity Extraction for exact cities/regions
-        # e.g. "Earthquake strikes Los Angeles", "M 5.0 in Taiwan"
-        m_loc = re.search(r"(?:in|near|of|strikes|hits|at|off)\s([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)", title)
+        # Prevent matching locations of administrative bodies
+        m_loc = re.search(r"(?<!Authority\s)(?<!Government\s)(?<!Ministry\s)(?<!Bank\s)(?<!Court\s)(?:in|near|of|strikes|hits|at|off)\s([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)", clean_title)
         if m_loc:
             candidate = m_loc.group(1).strip()
             if len(candidate) > 2 and candidate.lower() not in {"the", "a", "an", "new", "report", "video"}:
