@@ -23,65 +23,35 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger("dhruva.fusion")
 
-# Monitored countries with their ISO2 codes and center coordinates
-MONITORED_COUNTRIES = {
-    "Ukraine":      {"iso2": "UA", "lat": 49.0, "lon": 31.0},
-    "Russia":       {"iso2": "RU", "lat": 61.0, "lon": 105.0},
-    "China":        {"iso2": "CN", "lat": 35.0, "lon": 105.0},
-    "USA":          {"iso2": "US", "lat": 38.0, "lon": -97.0},
-    "Israel":       {"iso2": "IL", "lat": 31.5, "lon": 34.8},
-    "Gaza":         {"iso2": "PS", "lat": 31.4, "lon": 34.3},
-    "Iran":         {"iso2": "IR", "lat": 32.0, "lon": 53.0},
-    "Syria":        {"iso2": "SY", "lat": 35.0, "lon": 38.0},
-    "Yemen":        {"iso2": "YE", "lat": 15.5, "lon": 48.0},
-    "Sudan":        {"iso2": "SD", "lat": 15.0, "lon": 30.0},
-    "Myanmar":      {"iso2": "MM", "lat": 21.0, "lon": 96.0},
-    "DRC":          {"iso2": "CD", "lat": -2.0, "lon": 25.0},
-    "Somalia":      {"iso2": "SO", "lat": 6.0,  "lon": 46.0},
-    "Ethiopia":     {"iso2": "ET", "lat": 9.0,  "lon": 40.0},
-    "Mali":         {"iso2": "ML", "lat": 17.0, "lon": -4.0},
-    "Nigeria":      {"iso2": "NG", "lat": 10.0, "lon": 8.0},
-    "Venezuela":    {"iso2": "VE", "lat": 8.0,  "lon": -66.0},
-    "North Korea":  {"iso2": "KP", "lat": 40.0, "lon": 127.0},
-    "Pakistan":     {"iso2": "PK", "lat": 30.0, "lon": 70.0},
-    "Afghanistan":  {"iso2": "AF", "lat": 33.0, "lon": 66.0},
-    "Haiti":        {"iso2": "HT", "lat": 19.0, "lon": -72.0},
-    "Libya":        {"iso2": "LY", "lat": 27.0, "lon": 17.0},
-}
+from .global_countries import GLOBAL_COUNTRIES
 
-# Minimum instability floors (historically volatile states)
-COUNTRY_FLOORS = {
-    "Ukraine":     55,
-    "Gaza":        60,
-    "Syria":       50,
-    "Yemen":       45,
-    "Sudan":       45,
-    "Somalia":     40,
-    "DRC":         40,
-    "Afghanistan": 40,
-    "Myanmar":     35,
-    "North Korea": 30,
-}
+# Monitored countries with their ISO2 codes and center coordinates
+MONITORED_COUNTRIES = GLOBAL_COUNTRIES
+
+# Minimum instability floors (historically volatile states) - no longer applied per previous edits
+COUNTRY_FLOORS = {}
 
 # Radius within which events count toward a country's score (degrees ~111km)
 EVENT_RADIUS_DEG = 5.0
 
 # Weight configuration (must sum to 1.0)
 WEIGHTS = {
-    "conflict":  0.30,   # acled + ucdp
-    "military":  0.20,   # military + military_aircraft + military_marine
-    "disaster":  0.15,   # fire + earthquake
+    "conflict":  0.30,   # conflict + ucdp
+    "military":  0.25,   # military + military_aircraft + military_marine
     "protest":   0.20,   # protest
-    "cyber":     0.15,   # cyber
+    "cyber":     0.10,   # cyber
+    "outage":    0.10,   # outage
+    "notam":     0.05,   # notam
 }
 
 # Event types contributing to each signal bucket
 SIGNAL_BUCKETS = {
-    "conflict":  {"acled", "ucdp", "conflict"},
+    "conflict":  {"conflict", "ucdp"},
     "military":  {"military", "military_aircraft", "military_marine"},
-    "disaster":  {"fire", "earthquake"},
     "protest":   {"protest"},
     "cyber":     {"cyber"},
+    "outage":    {"outage"},
+    "notam":     {"notam"},
 }
 
 

@@ -8,6 +8,7 @@ import MarineTrafficView from './components/Views/MarineTrafficView';
 import CyberAttackView from './components/Views/CyberAttackView';
 import MarketTicker from './components/Ticker/MarketTicker';
 import LiveNewsTicker from './components/Ticker/LiveNewsTicker';
+import { CCTVGrid } from './components/CCTVGrid';
 import { useWebSocket } from './hooks/useWebSocket';
 import type { OsintEvent, EventType } from './types/events';
 import { LAYER_CONFIGS } from './types/events';
@@ -125,6 +126,12 @@ function App() {
 
       {/* ─── Market Ticker Bar ─── */}
       <MarketTicker />
+
+      {/* ─── Live CCTV Grid (Scroll down to view) ─── */}
+      <div className="w-full relative z-10 bg-slate-900 shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
+        <CCTVGrid />
+      </div>
+
     </div>
   );
 }

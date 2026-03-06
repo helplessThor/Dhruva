@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from fusion_engine.normalizer import normalize_batch, deduplicate_osint_batch
 from fusion_engine.risk_calculator import calculate_risk
 from fusion_engine.country_instability import compute_cii
+from backend.cctv_manager import get_top_cctv_feeds
 from backend.market_data import market_data_loop, get_market_data
 
 from collectors.earthquake_collector import EarthquakeCollector
@@ -465,6 +466,33 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 # ─── Run ───────────────────────────────────────────
+@app.get("/api/cctv")
+async def get_cctv_feeds():
+    """Return the top 4 live CCTV feeds based on highest current CII."""
+    cii_scores = compute_cii(event_store)
+    return get_top_cctv_feeds(cii_scores, count=4)
+
+@app.get("/api/cctv/search")
+async def search_cctv_feed(query: str):
+    """Search for a specific live city webcam to override the UI."""
+    from backend.cctv_manager import scrape_live_youtube_webcam
+    import urllib.parse
+    
+    # Simple parse: split city/country if possible, or just pass query as city
+    parts = query.split(',')
+    city = parts[0].strip()
+    country = parts[1].strip() if len(parts) > 1 else ""
+    
+    video_id = scrape_live_youtube_webcam(city, country)
+    if video_id:
+        return {
+            "success": True, 
+            "video_id": f"https://www.youtube.com/embed/{video_id}?autoplay=1&mute=1",
+            "city": city.title(),
+            "country": country.title()
+        }
+    return {"success": False, "error": "No live camera found."}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
