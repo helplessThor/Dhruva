@@ -28,26 +28,25 @@ class Settings(BaseSettings):
     cesium_ion_token: str = ""
 
     # Collector intervals (seconds)
-    earthquake_interval: int = 120
+    earthquake_interval: int = 300
     fire_interval: int = 600
     conflict_interval: int = 1800
-    aircraft_interval: int = 30
+    aircraft_interval: int = 180
     marine_interval: int = 300
     cyber_interval: int = 120
     outage_interval: int = 1800
     economic_interval: int = 300
     military_interval: int = 60
-    ucdp_interval: int = 120
-    acled_interval: int = 3600
+    ucdp_interval: int = 900
     naval_interval: int = 3600
     satellite_interval: int = 600
+    notam_interval: int = 1800
 
     # API Keys (optional — collectors use public APIs or mock data)
-    acled_email: Optional[str] = None
-    acled_password: Optional[str] = None
     adsb_api_key: Optional[str] = None
     ucdp_api_token: Optional[str] = None
-    groq_api_key: Optional[str] = None
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.1:8b"
     threatfox_api_key: Optional[str] = None
     n2yo_api_key: Optional[str] = None
 
@@ -75,24 +74,17 @@ def _load_settings() -> Settings:
                 if s.opensky_client_id:
                     _cfg_logger.info("OpenSky credentials loaded from %s", creds_path.name)
 
-            # ACLED API
-            if not s.acled_email or not s.acled_password:
-                s.acled_email = creds.get("acled_email", "")
-                s.acled_password = creds.get("acled_password", "")
-                if s.acled_email and s.acled_password:
-                    _cfg_logger.info("ACLED credentials loaded from %s", creds_path.name)
-            
             # UCDP API
             if not s.ucdp_api_token:
                 s.ucdp_api_token = creds.get("ucdp_api_token", "")
                 if s.ucdp_api_token:
                     _cfg_logger.info("UCDP credentials loaded from %s", creds_path.name)
                     
-            # Groq API
-            if not s.groq_api_key:
-                s.groq_api_key = creds.get("groq_api_key", "")
-                if s.groq_api_key:
-                    _cfg_logger.info("Groq API credentials loaded from %s", creds_path.name)
+            # Optional overrides from creds
+            if "ollama_url" in creds:
+                s.ollama_url = creds["ollama_url"]
+            if "ollama_model" in creds:
+                s.ollama_model = creds["ollama_model"]
             
             # ThreatFox API
             if not s.threatfox_api_key:

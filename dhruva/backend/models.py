@@ -21,8 +21,6 @@ class EventType(str, Enum):
     MILITARY_AIRCRAFT = "military_aircraft"
     MILITARY_MARINE = "military_marine"
     UCDP = "ucdp"
-    ACLED = "acled"
-    ACLED_CAST = "acled_cast"
     NAVAL = "naval"
     SATELLITE = "satellite"
     NOTAM = "notam"
@@ -73,8 +71,6 @@ class LayerState(BaseModel):
     military: bool = True
     military_aircraft: bool = True
     ucdp: bool = True
-    acled: bool = True
-    acled_cast: bool = True
     naval: bool = True
     satellite: bool = False
     notam: bool = True

@@ -85,7 +85,7 @@ def deduplicate_osint_batch(events: list[dict]) -> list[dict]:
                     existing["title"] = incoming["title"]
                     existing["description"] = incoming["description"]
                     existing["severity"] = incoming["severity"]
-                    existing["metadata"]["groq_verification"] = incoming.get("metadata", {}).get("groq_verification", "")
+                    existing["metadata"]["ai_verification"] = incoming.get("metadata", {}).get("ai_verification", "")
                 
                 break
                 

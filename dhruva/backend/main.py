@@ -35,8 +35,6 @@ from collectors.outage_collector import OutageCollector
 from collectors.economic_collector import EconomicCollector
 from collectors.military_activity_collector import MilitaryActivityCollector, infer_military_aircraft
 from collectors.ucdp_collector import UCDPCollector
-from collectors.acled_collector import ACLEDCollector
-from collectors.acled_cast_collector import ACLEDCastCollector
 from collectors.naval_collector import NavalCollector
 from collectors.satellite_collector import SatelliteCollector
 from collectors.notam_collector import NotamCollector
@@ -71,8 +69,6 @@ event_store: dict[str, list[dict]] = {
     "military": [],
     "military_aircraft": [],
     "ucdp": [],
-    "acled": [],
-    "acled_cast": [],
     "naval": [],
     "protest": [],
     "cii": [],
@@ -100,17 +96,15 @@ collectors = [
     EconomicCollector(interval=settings.economic_interval),
     MilitaryActivityCollector(interval=settings.military_interval),
     UCDPCollector(interval=settings.ucdp_interval),
-    ACLEDCollector(interval=settings.acled_interval),
-    ACLEDCastCollector(interval=21600),  # Fetch every 6 hours
     NavalCollector(interval=settings.naval_interval),
     SatelliteCollector(interval=settings.satellite_interval),
-    NotamCollector(interval=180),
+    NotamCollector(interval=settings.notam_interval),
     NewsCollector(interval=300),
 ]
 
 # Layer types that trigger hotspot / convergence recompute
 HOTSPOT_TRIGGER_LAYERS = {
-    "military", "ucdp", "acled", "acled_cast",
+    "military", "ucdp",
     "earthquake", "fire", "protest",
     "military_marine", "cyber", "outage",
 }
@@ -171,56 +165,6 @@ async def run_collector(collector):
             })
             continue  # Skip generic processing below for marine
 
-        # ── ACLED: broadcast on native layer ────────────────────
-        if etype == "acled":
-            normalized_acled = normalize_batch(events)
-            
-            event_store["acled"] = normalized_acled
-            data_freshness["acled"] = datetime.now(timezone.utc).isoformat()
-            
-            # Recalculate risk
-            all_events = []
-            for ev_list in event_store.values():
-                if isinstance(ev_list, list):
-                    all_events.extend(ev_list)
-            current_risk = calculate_risk(all_events)
-
-            await ws_manager.broadcast({
-                "action": "event_batch",
-                "layer": "acled",
-                "data": normalized_acled,
-                "risk": current_risk,
-            })
-            
-            # Recompute fusion since acled data just arrived
-            _recompute_fusion()
-            continue  # Skip generic processing
-            
-        # ── ACLED CAST: handle predictive alerts ─────────────────────
-        if etype == "acled_cast":
-            normalized_cast = normalize_batch(events)
-            
-            event_store["acled_cast"] = normalized_cast
-            data_freshness["acled_cast"] = datetime.now(timezone.utc).isoformat()
-            
-            # Recalculate risk
-            all_events = []
-            for ev_list in event_store.values():
-                if isinstance(ev_list, list):
-                    all_events.extend(ev_list)
-            current_risk = calculate_risk(all_events)
-
-            await ws_manager.broadcast({
-                "action": "event_batch",
-                "layer": "acled_cast",
-                "data": normalized_cast,
-                "risk": current_risk,
-            })
-            
-            # Trigger hotspot recomputation
-            _recompute_fusion()
-            continue
-            
         # ── Naval & UCDP Scrapers: Broadcast on native layer ────
         if etype in ["ucdp", "naval"]:
             normalized_osint = normalize_batch(events)

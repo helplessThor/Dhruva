@@ -59,10 +59,11 @@ class UCDPCollector(BaseCollector):
 
     # Articles older than this are ignored by OSINT Scraper
     FRESHNESS_HOURS = 12
-    OSINT_THROTTLE_SECONDS = 120
+    OSINT_THROTTLE_SECONDS = 900
 
-    def __init__(self, interval: int = 30):
-        super().__init__(name="ucdp", interval=interval)
+    def __init__(self, interval: int = 900):
+        super().__init__(name="ucdp", interval=30)
+        self.api_throttle = interval
         from backend.config import settings
         self.ucdp_api_token = settings.ucdp_api_token
         
@@ -77,11 +78,22 @@ class UCDPCollector(BaseCollector):
     async def collect(self) -> list[dict]:
         all_events = []
         
-        # 1. Official UCDP API (Runs every interval, paginating)
-        official_events = await self._fetch_official_ucdp()
-        all_events.extend(official_events)
+        # 1. Official UCDP API (Throttled via init interval)
+        now = datetime.now(timezone.utc)
+        should_fetch_api = (
+            not hasattr(self, '_last_api_fetch') or self._last_api_fetch is None or
+            (now - self._last_api_fetch).total_seconds() >= self.api_throttle
+        )
         
-        # 2. OSINT Scraper (Throttled to run only once per hour)
+        if should_fetch_api:
+            self._cached_official_events = await self._fetch_official_ucdp()
+            self._last_api_fetch = now
+            
+        # Ensure we always deal with the dictionary directly
+        official_events_list = self._cached_official_events if isinstance(self._cached_official_events, list) else list(self._cached_official_events.values())
+        all_events.extend(official_events_list)
+        
+        # 2. OSINT Scraper (Throttled to OSINT_THROTTLE_SECONDS)
         now = datetime.now(timezone.utc)
         should_run_osint = (
             self._last_osint_scrape is None or 
@@ -90,9 +102,12 @@ class UCDPCollector(BaseCollector):
         
         if should_run_osint:
             logger.info("[ucdp] OSINT throttle elapsed. Running live RSS scrape...")
-            self._cached_osint_events = await self._scrape_osint_rss()
+            await self._scrape_osint_rss()
             self._last_osint_scrape = now
             
+        # Filter out _rejected from background verification
+        self._cached_osint_events = [e for e in self._cached_osint_events if not e.get("_rejected")]
+        
         # 3. Deduplicate OSINT Scraper data against Official UCDP API data
         #    If an OSINT event is within 500km and 48 hours of an official event, drop it.
         filtered_osint = []
@@ -103,7 +118,7 @@ class UCDPCollector(BaseCollector):
             try: o_time = datetime.fromisoformat(osint_ev["timestamp"].replace("Z", "+00:00"))
             except: o_time = now
             
-            for official_ev in official_events:
+            for official_ev in official_events_list:
                 u_lat = official_ev["latitude"]
                 u_lon = official_ev["longitude"]
                 try: u_time = datetime.fromisoformat(official_ev["timestamp"].replace("Z", "+00:00"))
@@ -287,6 +302,7 @@ class UCDPCollector(BaseCollector):
                                     "lon": lon,
                                     "latest_time": pub_date,
                                     "titles": [],
+                                    "descriptions": [],
                                     "links": set() 
                                 }
                             
@@ -297,20 +313,30 @@ class UCDPCollector(BaseCollector):
                             events_by_region[country]["titles"].append(title)
                             events_by_region[country]["links"].add(link)
                             
+                            
+                            # Safely extract description text and strip HTML
+                            desc_text = item.findtext("description") or ""
+                            desc_text = re.sub(r'<[^>]+>', '', desc_text).strip()
+                            if desc_text:
+                                events_by_region[country]["descriptions"].append(desc_text)
+                            
                         except Exception as e:
                             logger.debug("[ucdp] Failed to parse RSS item: %s", e)
                             
                 except Exception as e:
                     logger.debug("[ucdp] Failed to scrape RSS feed chunk: %s", e)
                     
-        # Now pass grouped snippets to Groq AI for intelligent extraction
+        # Now pass grouped snippets to Ollama AI for intelligent verification
         osint_results = []
-        for country, data in events_by_region.items():
+        
+        # Prevent DDOSing local Ollama: take only the top 10 regions by source count
+        sorted_regions = sorted(events_by_region.items(), key=lambda x: len(x[1]["links"]), reverse=True)[:10]
+        
+        for country, data in sorted_regions:
             link_list = list(data["links"])
             source_count = len(link_list)
             
-            # Cross-verification status
-            verification_status = "CONFIRMED" if source_count > 1 else "SUSPECTED"
+            base_verification_status = "CONFIRMED" if source_count > 1 else "SUSPECTED"
             
             # Pick the most representative title
             primary_title = data["titles"][0]
@@ -319,28 +345,105 @@ class UCDPCollector(BaseCollector):
             lon = data.get("lon", 0.0)
             exact_time = data['latest_time'].isoformat()
             
-            event_id = str(hash(country + exact_time + primary_title))[:10].replace("-", "")
+            import hashlib
+            from datetime import date
+            hash_str = f"{country}_{date.today()}"
+            event_id = hashlib.md5(hash_str.encode()).hexdigest()[:10]
 
-            osint_results.append({
+            desc = f"*[Pending AI]*\n[{base_verification_status}] {primary_title}\n\n"
+            desc += f"*Sources: {source_count}*\n\n"
+            desc += f"🤖 **[AI Assessment]** (Confidence: PENDING)\nAwaiting offline LLM verification..."
+
+            event_obj = {
                 "id": f"ucdp-osint-{event_id}",
                 "type": "ucdp",
                 "latitude": lat,
                 "longitude": lon,
-                "severity": 4 if source_count > 1 else 3,
+                "severity": 3,
                 "timestamp": exact_time,
                 "source": "OSINT Conflict Scraper",
-                "title": f"Armed Conflict — {country}",
-                "description": f"[{verification_status}] {primary_title}\n\n*Sources: {source_count}*",
+                "title": f"[Pending AI] Armed Conflict — {country}",
+                "description": desc,
                 "metadata": {
-                    "verification": "OSINT Cross-Verified",
+                    "verification": "PENDING AI",
                     "urls": link_list,
                     "country": country,
                     "scraped_at": datetime.now(timezone.utc).isoformat(),
+                    "ai_verification": "Awaiting local LLM evaluation...",
+                    "confidence_score": 0,
+                    "base_verification": base_verification_status,
                 },
-            })
+            }
+                        # Prevent array wiping and redundant AI spam
+            existing = next((e for e in self._cached_osint_events if e["id"] == event_obj["id"]), None)
+            if existing:
+                continue
+            self._cached_osint_events.append(event_obj)
+            osint_results.append(event_obj)
+            
+            texts_to_analyze = [primary_title] + data.get("descriptions", [])[:3]
+            import asyncio
+            asyncio.create_task(self._background_verify(event_obj["id"], primary_title, texts_to_analyze, exact_time, country))
 
-        logger.info("[ucdp] OSINT Scraper returned %d live cross-verified conflict events", len(osint_results))
+        logger.info("[ucdp] OSINT Scraper returned %d pending live conflict events", len(osint_results))
         return osint_results
+
+    async def _background_verify(self, event_id: str, title: str, texts: list[str], exact_time: str, country: str):
+        from backend.ai_service import ai_service
+        try:
+            ai_result = await ai_service.verify_and_extract_event(
+                title=title,
+                texts=texts,
+                current_time=exact_time,
+                event_type="conflict"
+            )
+            
+            # Find the actual event in our cache by ID
+            event_obj = next((e for e in self._cached_osint_events if e["id"] == event_id), None)
+            if not event_obj:
+                logger.warning("[ucdp] Background AI finished but event %s is no longer in cache", event_id)
+                return
+                
+            if ai_result.get("verified", "NO").upper() != "YES":
+                logger.info("[ucdp] Ollama AI rejected false positive. Reasoning: %s", ai_result.get("reasoning"))
+                event_obj["_rejected"] = True
+                return
+                
+            ai_reasoning = ai_result.get("reasoning", "Verified as a credible conflict event.")
+            confidence = ai_result.get("confidence_score", 0)
+            base_verification_status = event_obj["metadata"].get("base_verification", "SUSPECTED")
+            verification_status = "AI CONFIRMED" if confidence > 75 else base_verification_status
+            
+            logger.info("[ucdp] Ollama AI accepted event in %s: %s (Confidence: %s)", country, ai_reasoning, confidence)
+            
+            event_obj["severity"] = 4 if confidence > 80 else 3
+            event_obj["timestamp"] = ai_result.get("time", exact_time)
+            
+            if ai_result.get("latitude") and ai_result.get("longitude"):
+                try:
+                    event_obj["latitude"] = float(ai_result["latitude"])
+                    event_obj["longitude"] = float(ai_result["longitude"])
+                except Exception:
+                    pass
+                    
+            if ai_result.get("location_name") and str(ai_result.get("location_name")).strip():
+                event_obj["metadata"]["country"] = ai_result["location_name"]
+                event_obj["title"] = f"Armed Conflict — {ai_result['location_name']}"
+            else:
+                event_obj["title"] = event_obj["title"].replace("[Pending AI] ", "")
+            
+            event_obj["metadata"]["verification"] = verification_status
+            event_obj["metadata"]["ai_verification"] = ai_reasoning
+            event_obj["metadata"]["confidence_score"] = confidence
+            
+            desc = event_obj["description"].replace("*[Pending AI]*\n", "")
+            desc = desc.replace(
+                "🤖 **[AI Assessment]** (Confidence: PENDING)\nAwaiting offline LLM verification...", 
+                f"🤖 **[AI Assessment]** (Confidence: {confidence}%)\n{ai_reasoning}"
+            )
+            event_obj["description"] = desc
+        except Exception as e:
+            logger.error("[ucdp] Background AI error: %s", e)
 
     async def _async_extract_conflict_coords(self, title: str) -> tuple[float, float, str]:
         """Smart heuristics to place the pin precisely where the news is talking about using NLP offline geocoding."""

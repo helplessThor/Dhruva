@@ -36,12 +36,28 @@ class NotamCollector(BaseCollector):
 
     FRESHNESS_HOURS = 24
 
-    def __init__(self, interval: int = 300):
-        # Runs every 5 minutes globally
-        super().__init__(name="notam", interval=interval)
+    def __init__(self, interval: int = 7200):
+        super().__init__(name="notam", interval=30)
+        self._last_osint_scrape = None
+        self._cached_osint_events = []
+        self.OSINT_THROTTLE_SECONDS = interval
 
     async def collect(self) -> list[dict]:
-        events = []
+        now = datetime.now(timezone.utc)
+        should_run_osint = (
+            self._last_osint_scrape is None or 
+            (now - self._last_osint_scrape).total_seconds() >= self.OSINT_THROTTLE_SECONDS
+        )
+        
+        if should_run_osint:
+            logger.info("[notam] OSINT throttle elapsed. Running live RSS scrape...")
+            await self._scrape_osint_rss()
+            self._last_osint_scrape = now
+            
+        self._cached_osint_events = [e for e in self._cached_osint_events if not e.get("_rejected")]
+        return self._cached_osint_events
+
+    async def _scrape_osint_rss(self) -> list[dict]:
         events_by_region = {}
         
         # Chunk keywords to prevent 414 URI Too Long errors
@@ -107,6 +123,7 @@ class NotamCollector(BaseCollector):
                                     "lon": lon,
                                     "latest_time": pub_date,
                                     "titles": [],
+                                    "descriptions": [],
                                     "links": set() 
                                 }
                             
@@ -116,19 +133,28 @@ class NotamCollector(BaseCollector):
                             events_by_region[region]["titles"].append(title)
                             events_by_region[region]["links"].add(link)
                             
+                            desc_text = item.findtext("description") or ""
+                            desc_text = re.sub(r'<[^>]+>', '', desc_text).strip()
+                            if desc_text:
+                                events_by_region[region]["descriptions"].append(desc_text)
+                            
                         except Exception as e:
                             logger.debug("[notam] Failed to parse RSS item: %s", e)
                             
                 except Exception as e:
                     logger.debug("[notam] Failed to scrape RSS feed chunk: %s", e)
                     
-        # Now pass grouped snippets to Groq AI
+        # Now pass grouped snippets to Ollama AI
         osint_results = []
-        for region, data in events_by_region.items():
+        
+        # Prevent DDOSing local Ollama: take only the top 10 regions by source count
+        sorted_regions = sorted(events_by_region.items(), key=lambda x: len(x[1]["links"]), reverse=True)[:10]
+        
+        for region, data in sorted_regions:
             link_list = list(data["links"])
             source_count = len(link_list)
             
-            verification_status = "CONFIRMED" if source_count > 1 else "SUSPECTED"
+            base_verification_status = "CONFIRMED" if source_count > 1 else "SUSPECTED"
             primary_title = data["titles"][0]
             
             lat = data.get("lat", 0.0)
@@ -136,9 +162,15 @@ class NotamCollector(BaseCollector):
             exact_time = data['latest_time'].isoformat()
             radius_km = 200 # Default restriction radius
             
-            event_id = str(hash(region + exact_time + primary_title))[:10].replace("-", "")
+            import hashlib
+            from datetime import date
+            hash_str = f"{region}_{date.today()}"
+            event_id = hashlib.md5(hash_str.encode()).hexdigest()[:10]
 
-            osint_results.append({
+            desc = f"*[Pending AI]*\n[{base_verification_status}] {primary_title}\n\nRestriction Radius: ~{radius_km}km\n*Sources: {source_count}*\n\n"
+            desc += f"🤖 **[AI Assessment]** (Confidence: PENDING)\nAwaiting offline LLM verification..."
+
+            event_obj = {
                 "id": f"notam-osint-{event_id}",
                 "type": "notam",
                 "latitude": lat,
@@ -146,19 +178,87 @@ class NotamCollector(BaseCollector):
                 "severity": 4, # High severity for warzone predictions
                 "timestamp": exact_time,
                 "source": "OSINT NOTAM Scraper",
-                "title": f"Restricted Airspace — {region}",
-                "description": f"[{verification_status}] {primary_title}\n\nRestriction Radius: ~{radius_km}km\n*Sources: {source_count}*",
+                "title": f"[Pending AI] Restricted Airspace — {region}",
+                "description": desc,
                 "metadata": {
-                    "verification": "OSINT Cross-Verified",
+                    "verification": "PENDING AI",
                     "urls": link_list,
                     "country": region,
                     "radius_km": radius_km,
                     "scraped_at": datetime.now(timezone.utc).isoformat(),
+                    "ai_verification": "Awaiting local LLM evaluation...",
+                    "confidence_score": 0,
+                    "base_verification": base_verification_status,
                 },
-            })
+            }
+                        # Prevent array wiping and redundant AI spam
+            existing = next((e for e in self._cached_osint_events if e["id"] == event_obj["id"]), None)
+            if existing:
+                continue
+            self._cached_osint_events.append(event_obj)
+            osint_results.append(event_obj)
+            
+            texts_to_analyze = [primary_title] + data.get("descriptions", [])[:3]
+            asyncio.create_task(self._background_verify(event_obj["id"], primary_title, texts_to_analyze, exact_time, region))
 
-        logger.info("[notam] OSINT Scraper returned %d live airspace closure events", len(osint_results))
+        logger.info("[notam] OSINT Scraper returned %d pending airspace closure events", len(osint_results))
         return osint_results
+
+    async def _background_verify(self, event_id: str, title: str, texts: list[str], exact_time: str, region: str):
+        from backend.ai_service import ai_service
+        try:
+            ai_result = await ai_service.verify_and_extract_event(
+                title=title,
+                texts=texts,
+                current_time=exact_time,
+                event_type="notam"
+            )
+            
+            # Find the actual event in our cache by ID
+            event_obj = next((e for e in self._cached_osint_events if e["id"] == event_id), None)
+            if not event_obj:
+                logger.warning("[notam] Background AI finished but event %s is no longer in cache", event_id)
+                return
+                
+            if ai_result.get("verified", "NO").upper() != "YES":
+                logger.info("[notam] Ollama AI rejected false positive. Reasoning: %s", ai_result.get("reasoning"))
+                event_obj["_rejected"] = True
+                return
+                
+            ai_reasoning = ai_result.get("reasoning", "Verified as an airspace restriction.")
+            confidence = ai_result.get("confidence_score", 0)
+            base_verification_status = event_obj["metadata"].get("base_verification", "SUSPECTED")
+            verification_status = "AI CONFIRMED" if confidence > 75 else base_verification_status
+            
+            logger.info("[notam] Ollama AI accepted event in %s: %s (Confidence: %s)", region, ai_reasoning, confidence)
+            
+            event_obj["timestamp"] = ai_result.get("time", exact_time)
+            
+            if ai_result.get("latitude") and ai_result.get("longitude"):
+                try:
+                    event_obj["latitude"] = float(ai_result["latitude"])
+                    event_obj["longitude"] = float(ai_result["longitude"])
+                except Exception:
+                    pass
+                    
+            if ai_result.get("location_name") and str(ai_result.get("location_name")).strip():
+                event_obj["metadata"]["country"] = ai_result["location_name"]
+                event_obj["title"] = f"Restricted Airspace — {ai_result['location_name']}"
+            else:
+                event_obj["title"] = event_obj["title"].replace("[Pending AI] ", "")
+            
+            event_obj["metadata"]["verification"] = verification_status
+            event_obj["metadata"]["ai_verification"] = ai_reasoning
+            event_obj["metadata"]["confidence_score"] = confidence
+            
+            desc = event_obj["description"].replace("*[Pending AI]*\n", "")
+            desc = desc.replace(
+                "🤖 **[AI Assessment]** (Confidence: PENDING)\nAwaiting offline LLM verification...", 
+                f"🤖 **[AI Assessment]** (Confidence: {confidence}%)\n{ai_reasoning}"
+            )
+            event_obj["description"] = desc
+        except Exception as e:
+            logger.error("[notam] Background AI error: %s", e)
 
     async def _async_extract_region_coords(self, title: str) -> tuple[float, float, str]:
         """Smart heuristics to place the pin precisely using NLP offline geocoding."""

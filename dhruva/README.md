@@ -3,7 +3,7 @@
 **Palantir-style intelligence dashboard** visualizing real-time OSINT data on an interactive 3D globe with a dark military theme. Dhruva merges official institutional APIs with dynamic AI-verified OSINT scrapers to detect global events, multi-domain intelligence hotspots, and geographic convergence.
 
 ![Architecture](https://img.shields.io/badge/Architecture-FastAPI%20+%20React%20+%20CesiumJS-blue)
-![AI Verification](https://img.shields.io/badge/OSINT-Groq%20LLM%20Verification-orange)
+![AI Verification](https://img.shields.io/badge/OSINT-Ollama%20LLM%20Verification-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
@@ -54,8 +54,10 @@ Create `dhruva/backend/.env` for external API and AI integration:
 
 ```env
 DHRUVA_USE_REDIS=false
-DHRUVA_GROQ_API_KEY=your_groq_api_key                # OSINT Text scraping & verification
 DHRUVA_ACLED_API_KEY=your_acled_key                  # ACLED Conflict Data
+DHRUVA_ACLED_EMAIL=your_email                        # ACLED Email
+DHRUVA_UCDP_API_TOKEN=your_ucdp_token                # UCDP Conflict Data
+DHRUVA_N2YO_API_KEY=your_n2yo_key                    # Live Satellite Tracking
 DHRUVA_ACLED_EMAIL=your_email                        # ACLED Email
 DHRUVA_UCDP_API_TOKEN=your_ucdp_token                # UCDP Conflict Data
 DHRUVA_N2YO_API_KEY=your_n2yo_key                    # Live Satellite Tracking
@@ -71,7 +73,7 @@ VITE_CESIUM_ION_TOKEN=your_cesium_ion_token          # 3D Globe Rendering
 
 ## Architecture
 
-Dhruva utilizes a decoupled architecture where Python Async Collectors constantly pull data from 15+ sources. Official API data is then automatically merged with OSINT news scraping verified by an intelligent Groq LLM fallback cycle.
+Dhruva utilizes a decoupled architecture where Python Async Collectors constantly pull data from 15+ sources. Official API data is then automatically merged with OSINT news scraping verified by an intelligent local Ollama LLM cycle.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐

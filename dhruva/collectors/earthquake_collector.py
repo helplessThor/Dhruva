@@ -30,9 +30,14 @@ class EarthquakeCollector(BaseCollector):
     FRESHNESS_HOURS = 24
     OSINT_THROTTLE_SECONDS = 3600
 
-    def __init__(self, interval: int = 30):
-        super().__init__(name="earthquake", interval=interval)
+    def __init__(self, interval: int = 300):
+        super().__init__(name="earthquake", interval=30)
+        self.api_throttle = interval
         self.retention_hours = 24.0
+        
+        # State tracking for APIs
+        self._last_usgs_fetch: datetime | None = None
+        self._cached_usgs_data: dict = {}
         
         # State tracking for OSINT Scraper
         self._last_osint_scrape: datetime | None = None
@@ -50,9 +55,20 @@ class EarthquakeCollector(BaseCollector):
         return 1
 
     async def collect(self) -> list[dict]:
-        data = await self.fetch_json(self.API_URL)
-        events = []
         now = datetime.now(timezone.utc)
+        
+        # Throttled USGS Fetch
+        should_fetch_usgs = (
+            self._last_usgs_fetch is None or
+            (now - self._last_usgs_fetch).total_seconds() >= self.api_throttle
+        )
+        if should_fetch_usgs:
+            logger.info("[earthquake] Fetching latest USGS feed...")
+            self._cached_usgs_data = await self.fetch_json(self.API_URL)
+            self._last_usgs_fetch = now
+            
+        data = self._cached_usgs_data
+        events = []
 
         for feature in data.get("features", []):
             fid = feature["id"]
@@ -95,8 +111,11 @@ class EarthquakeCollector(BaseCollector):
         
         if should_run_osint:
             logger.info("[earthquake] OSINT throttle elapsed. Running live RSS scrape...")
-            self._cached_osint_events = await self._scrape_osint_rss()
+            await self._scrape_osint_rss()
             self._last_osint_scrape = now
+            
+        # Filter out _rejected ones
+        self._cached_osint_events = [e for e in self._cached_osint_events if not e.get("_rejected")]
             
         # Deduplicate OSINT events against official USGS events
         filtered_osint = []
@@ -212,6 +231,7 @@ class EarthquakeCollector(BaseCollector):
                                     "mag": mag,
                                     "latest_time": pub_date,
                                     "titles": [],
+                                    "descriptions": [],
                                     "links": set() 
                                 }
                             
@@ -221,13 +241,20 @@ class EarthquakeCollector(BaseCollector):
                             events_by_region[loc_name]["titles"].append(title)
                             events_by_region[loc_name]["links"].add(link)
                             
+                            
+                            # Safely extract description text and strip HTML
+                            desc_text = item.findtext("description") or ""
+                            desc_text = re.sub(r'<[^>]+>', '', desc_text).strip()
+                            if desc_text:
+                                events_by_region[loc_name]["descriptions"].append(desc_text)
+                            
                         except Exception as e:
                             logger.debug("[earthquake] Failed to parse RSS item: %s", e)
                             
                 except Exception as e:
                     logger.debug("[earthquake] Failed to scrape RSS feed chunk: %s", e)
                     
-        # Groq AI Verification
+        # Immediately return OSINT array as Pending and fire background verification tasks
         osint_results = []
         for loc_name, data in events_by_region.items():
             link_list = list(data["links"])
@@ -238,10 +265,15 @@ class EarthquakeCollector(BaseCollector):
             lat = data.get("lat", 0.0)
             lon = data.get("lon", 0.0)
             exact_time = data['latest_time'].isoformat()
-            
-            event_id = str(hash(loc_name + exact_time + primary_title))[:10].replace("-", "")
+            import hashlib
+            from datetime import date
+            hash_str = f"{loc_name}_{date.today()}"
+            event_id = hashlib.md5(hash_str.encode()).hexdigest()[:10]
 
-            osint_results.append({
+            desc = f"{primary_title}\n\nMagnitude: {mag}\n*Sources: {source_count}*\n\n"
+            desc += f"🤖 **[AI Assessment]** (Turned Off)"
+
+            event_obj = {
                 "id": f"eq-osint-{event_id}",
                 "type": "earthquake",
                 "latitude": lat,
@@ -250,18 +282,65 @@ class EarthquakeCollector(BaseCollector):
                 "timestamp": exact_time,
                 "source": "OSINT Scraper",
                 "title": f"M{mag} Earthquake — {loc_name}",
-                "description": f"{primary_title}\n\nMagnitude: {mag}\n*Sources: {source_count}*",
+                "description": desc,
                 "metadata": {
                     "magnitude": mag,
                     "urls": link_list,
                     "location_name": loc_name,
                     "scraped_at": datetime.now(timezone.utc).isoformat(),
-                    "verified": "OSINT Cross-Verified",
+                    "verification": "SUSPECTED",
+                    "ai_verification": "AI Verification Disabled",
+                    "confidence_score": 0,
                 },
-            })
+            }
+                        # Prevent array wiping and redundant AI spam
+            existing = next((e for e in self._cached_osint_events if e["id"] == event_obj["id"]), None)
+            if existing:
+                continue
+            self._cached_osint_events.append(event_obj)
+            osint_results.append(event_obj)
+            
+            # Fire background task (Turned off for earthquakes)
+            # texts_to_analyze = [primary_title] + data.get("descriptions", [])[:3]
+            # asyncio.create_task(self._background_verify(event_obj, primary_title, texts_to_analyze, exact_time))
 
-        logger.info("[earthquake] OSINT Scraper returned %d verified earthquake events", len(osint_results))
+        logger.info("[earthquake] OSINT Scraper returned %d pending earthquake events", len(osint_results))
         return osint_results
+
+    async def _background_verify(self, event_obj, title, texts, exact_time):
+        from backend.ai_service import ai_service
+        try:
+            ai_result = await ai_service.verify_and_extract_event(
+                title=title,
+                texts=texts,
+                current_time=exact_time,
+                event_type="earthquake"
+            )
+            
+            if ai_result.get("verified", "NO").upper() != "YES":
+                logger.info("[earthquake] Ollama AI rejected false positive. Reasoning: %s", ai_result.get("reasoning"))
+                event_obj["_rejected"] = True
+                return
+                
+            confidence = ai_result.get("confidence_score", 0)
+            reasoning = ai_result.get("reasoning", "Verified earthquake event.")
+            
+            logger.info("[earthquake] Ollama AI accepted event: %s (Confidence: %s)", reasoning, confidence)
+            
+            event_obj["metadata"]["verification"] = "AI CONFIRMED" if confidence > 75 else "SUSPECTED"
+            event_obj["metadata"]["ai_verification"] = reasoning
+            event_obj["metadata"]["confidence_score"] = confidence
+            event_obj["title"] = event_obj["title"].replace("[Pending AI] ", "")
+            
+            # Update desc
+            desc = event_obj["description"].replace("*[Pending AI]*\n", "")
+            desc = desc.replace(
+                "🤖 **[AI Assessment]** (Confidence: PENDING)\nAwaiting offline LLM verification...", 
+                f"🤖 **[AI Assessment]** (Confidence: {confidence}%)\n{ai_result.get('reasoning', reasoning)}"
+            )
+            event_obj["description"] = desc
+        except Exception as e:
+            logger.error("[earthquake] Background AI error: %s", e)
     async def _async_extract_earthquake_coords(self, title: str) -> tuple[float, float, str, float]:
         """Smart heuristics for earthquake extraction [lat, lon, location_name, mag] using NLP offline geocoding."""
         import re

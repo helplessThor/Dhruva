@@ -36,7 +36,7 @@ SPORTS_KEYWORDS = {
     "nhl", "nfl", "nba", "mlb", "fifa", "uefa", "wimbledon", "super bowl",
     "matchday", "qualifier", "semifinal", "semi-final", "final", "playoff", "knockout",
     "goal", "hat-trick", "captain", "coach", "striker", "midfielder", "goalkeeper", "festive", "festival",
-    "why", "how", "what"
+    "why", "how", "what","watch"
 }
 
 # High-impact catastrophic keywords to filter local news
