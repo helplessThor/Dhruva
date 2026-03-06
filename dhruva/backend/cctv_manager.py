@@ -18,33 +18,56 @@ logger = logging.getLogger("dhruva.cctv")
 _YOUTUBE_CACHE: Dict[str, str] = {}
 
 def scrape_live_youtube_webcam(city: str, country: str) -> Optional[str]:
-    """Dynamically scrape YouTube for a live webcam in the specified city/country."""
+    """Dynamically scrape YouTube for a live webcam or feed in the specified city/country."""
     cache_key = f"{city}_{country}"
     if cache_key in _YOUTUBE_CACHE:
         return _YOUTUBE_CACHE[cache_key]
         
-    query = f"live webcams {city} {country} cctv"
-    encoded_query = urllib.parse.quote_plus(query)
-    # sp=EgJAAQ%253D%253D filters YouTube search precisely to "Live" videos
-    url = f"https://www.youtube.com/results?search_query={encoded_query}&sp=EgJAAQ%253D%253D"
+    # Build fallback queries. Try exact city camera first, then broad country live stream.
+    queries = [
+        f"live camera {city} {country} street",
+        f"live {country} news english",
+        f"live {city} tv"
+    ]
     
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-    )
-    
-    try:
-        with urllib.request.urlopen(req) as response:
-            html = response.read().decode('utf-8')
-            # Look for the first video ID in the raw JSON payload embedded in the page
-            match = re.search(r'"videoId":"([^"]{11})"', html)
-            if match:
-                video_id = match.group(1)
-                _YOUTUBE_CACHE[cache_key] = video_id
-                return video_id
-    except Exception as e:
-        logger.error(f"Failed to scrape YouTube for {city}: {e}")
+    for query in queries:
+        encoded_query = urllib.parse.quote_plus(query)
+        # sp=EgJAAQ%253D%253D filters YouTube search precisely to "Live" videos
+        url = f"https://www.youtube.com/results?search_query={encoded_query}&sp=EgJAAQ%253D%253D"
         
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+        )
+        
+        try:
+            with urllib.request.urlopen(req) as response:
+                html = response.read().decode('utf-8')
+                match = re.search(r'var ytInitialData = (\{.*?\});</script>', html)
+                if match:
+                    import json
+                    data = json.loads(match.group(1))
+                    contents = data.get('contents', {}).get('twoColumnSearchResultsRenderer', {}).get('primaryContents', {}).get('sectionListRenderer', {}).get('contents', [])
+                    if contents:
+                        items = contents[0].get('itemSectionRenderer', {}).get('contents', [])
+                        for item in items:
+                            if 'videoRenderer' in item:
+                                vr = item['videoRenderer']
+                                title = vr.get('title', {}).get('runs', [{}])[0].get('text', '')
+                                vid = vr.get('videoId', '')
+                                
+                                # Strict Validation: the video title must explicitly mention the city or country
+                                # to avoid random proxy streams.
+                                title_lower = title.lower()
+                                city_match = city.lower() in title_lower and len(city) > 2
+                                country_match = country.lower() in title_lower and len(country) > 2
+                                
+                                if city_match or country_match:
+                                    _YOUTUBE_CACHE[cache_key] = vid
+                                    return vid
+        except Exception as e:
+            logger.error(f"Failed to scrape YouTube for {query}: {e}")
+            
     return None
 
 # Known unstable region primary cities and their fallback neighbors
