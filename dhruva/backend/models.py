@@ -24,6 +24,7 @@ class EventType(str, Enum):
     NAVAL = "naval"
     SATELLITE = "satellite"
     NOTAM = "notam"
+    WAR = "war"
 
 
 class Severity(int, Enum):
@@ -74,6 +75,7 @@ class LayerState(BaseModel):
     naval: bool = True
     satellite: bool = False
     notam: bool = True
+    war: bool = True
 
 
 class WebSocketMessage(BaseModel):

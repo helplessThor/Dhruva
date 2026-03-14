@@ -10,7 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@turf/helpers": "^7.3.4",
+    "@turf/rhumb-destination": "^7.3.4",
     "@types/cesium": "^1.67.14",
+    "@types/geojson": "^7946.0.16",
     "cesium": "^1.138.0",
     "lucide-react": "^0.577.0",
     "react": "^19.2.0",

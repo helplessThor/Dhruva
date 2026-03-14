@@ -110,11 +110,26 @@ def compute_cii(event_store: dict[str, list[dict]]) -> list[dict]:
             ]
             bucket_scores[bucket] = _signal_score(nearby, bucket)
 
+        # Look strictly for war events that this country is part of
+        country_war_severity = 0
+        if "war" in event_store:
+            for war_evt in event_store["war"]:
+                if war_evt.get("metadata", {}).get("country_iso2") == iso2:
+                    country_war_severity = war_evt.get("severity", 0)
+                    break
+        
         # Weighted composite score
         raw_score = sum(
             bucket_scores[bucket] * weight
             for bucket, weight in WEIGHTS.items()
         )
+        
+        # Override baseline score heavily if an active war is ongoing
+        if country_war_severity > 0:
+            # Severity 5 -> 100, Sev 4 -> 90, Sev 3 -> 80
+            war_base = 50 + (country_war_severity * 10) 
+            raw_score = max(raw_score, war_base)
+            
         raw_score = round(raw_score, 1)
 
         # Strictly based on real data now (no floors)
@@ -147,6 +162,7 @@ def compute_cii(event_store: dict[str, list[dict]]) -> list[dict]:
             "floor_applied": score > raw_score,
             "label": label,
             "color": color,
+            "war_severity": country_war_severity,
             "signals": {b: round(v, 1) for b, v in bucket_scores.items()},
             "timestamp": now,
         })

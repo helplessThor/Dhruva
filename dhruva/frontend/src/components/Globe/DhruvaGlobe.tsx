@@ -12,6 +12,7 @@ import {
     NearFarScalar,
     VerticalOrigin,
     ArcGisMapServerImageryProvider,
+    GeoJsonDataSource
 } from 'cesium';
 import type { OsintEvent, EventType } from '../../types/events';
 import { SEVERITY_COLORS, LAYER_CONFIGS } from '../../types/events';
@@ -83,16 +84,6 @@ const MARKER_DEFS: Record<EventType, { color: string; symbol: string; scale: num
         symbol: '<path d="M8 2l6.5 11H1.5z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><path d="M8 6v3M8 11.5v.5" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />',
         scale: 1,
     },
-    acled: {
-        color: '#f97316',
-        symbol: '<path d="M8 1C5.5 1 3.5 3 3.5 5.5c0 3 4.5 9.5 4.5 9.5s4.5-6.5 4.5-9.5C12.5 3 10.5 1 8 1z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="5.5" r="2" fill="#fff" />',
-        scale: 1.1,
-    },
-    acled_cast: {
-        color: '#fbbf24',
-        symbol: '<path d="M8 1C5.5 1 3.5 3 3.5 5.5c0 3 4.5 9.5 4.5 9.5s4.5-6.5 4.5-9.5C12.5 3 10.5 1 8 1z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="5.5" r="2" fill="#fff" />',
-        scale: 1.1,
-    },
     naval: {
         color: '#3b82f6',
         symbol: '<path d="M2 10l1-5h8l2 5z" fill="#fff" opacity="0.8" /><path d="M4 5V3h4v2" fill="none" stroke="#fff" stroke-width="1.5" /><path d="M1 12c2 1 4-1 6 0s4 1 6 0 2-1 2-1" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />',
@@ -116,6 +107,21 @@ const MARKER_DEFS: Record<EventType, { color: string; symbol: string; scale: num
     news: {
         color: '#ffffff',
         symbol: '<circle cx="8" cy="8" r="6" fill="none" stroke="#fff" stroke-width="1.5" /><path d="M8 2v12M2 8h12" fill="none" stroke="#fff" stroke-width="1" />',
+        scale: 1.0,
+    },
+    war: {
+        color: '#ff0033',
+        symbol: '<path d="M8 1.5l5 2v4c0 4-5 6.5-5 6.5S3 11.5 3 7.5v-4z" fill="none" stroke="#fff" stroke-width="1.5" /><circle cx="8" cy="7" r="2" fill="#fff" opacity="0.8" />',
+        scale: 1.3,
+    },
+    acled: {
+        color: '#f97316',
+        symbol: '<path d="M8 1C5.5 1 3.5 3 3.5 5.5c0 3 4.5 9.5 4.5 9.5s4.5-6.5 4.5-9.5C12.5 3 10.5 1 8 1z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="5.5" r="2" fill="#fff" />',
+        scale: 1.0,
+    },
+    acled_cast: {
+        color: '#f97316',
+        symbol: '<path d="M8 1C5.5 1 3.5 3 3.5 5.5c0 3 4.5 9.5 4.5 9.5s4.5-6.5 4.5-9.5C12.5 3 10.5 1 8 1z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /><circle cx="8" cy="5.5" r="2" fill="none" stroke="#fff" />',
         scale: 1.0,
     }
 };
@@ -268,6 +274,68 @@ const GlobeLegend: React.FC<{ enabledLayers: Set<EventType> }> = ({ enabledLayer
     );
 };
 
+/* ── War Borders GeoJSON component ──────────────────────────────── */
+const WarBorders: React.FC<{ activeWarIsos: Map<string, number> }> = ({ activeWarIsos }) => {
+    const { viewer } = useCesium();
+    const [dataSource, setDataSource] = React.useState<GeoJsonDataSource | null>(null);
+
+    useEffect(() => {
+        if (!viewer) return;
+
+        let isMounted = true;
+        let dsInstance: GeoJsonDataSource | null = null;
+
+        GeoJsonDataSource.load('/countries.geojson').then((ds) => {
+            if (!isMounted) return;
+            viewer.dataSources.add(ds);
+            setDataSource(ds);
+            dsInstance = ds;
+        }).catch(err => console.error("Failed to load country borders:", err));
+
+        return () => {
+            isMounted = false;
+            if (viewer && dsInstance) {
+                viewer.dataSources.remove(dsInstance);
+            }
+        };
+    }, [viewer]);
+
+    useEffect(() => {
+        if (!dataSource) return;
+
+        const entities = dataSource.entities.values;
+        // Cesium requires suspending events for bulk updates to be performant
+        dataSource.entities.suspendEvents();
+
+        for (let i = 0; i < entities.length; i++) {
+            const entity = entities[i];
+            const iso2Prop = entity.properties?.['ISO3166-1-Alpha-2'];
+            const iso2 = iso2Prop ? iso2Prop.getValue() : null;
+
+            if (entity.polygon) {
+                if (iso2 && activeWarIsos.has(iso2)) {
+                    // Active war zone styling
+                    const severity = activeWarIsos.get(iso2) || 4; // fallback severity
+                    const hexColor = SEVERITY_COLORS[severity] || '#ff0033';
+                    
+                    entity.polygon.material = Color.fromCssColorString(hexColor).withAlpha(0.35) as any;
+                    entity.polygon.outline = true as any;
+                    entity.polygon.outlineColor = Color.fromCssColorString(hexColor).withAlpha(0.9) as any;
+                    entity.polygon.outlineWidth = 2 as any;
+                } else {
+                    // Hide non-war zones
+                    entity.polygon.material = Color.TRANSPARENT as any;
+                    entity.polygon.outline = false as any;
+                }
+            }
+        }
+
+        dataSource.entities.resumeEvents();
+    }, [dataSource, activeWarIsos]);
+
+    return null;
+};
+
 /* ── Main globe component ───────────────────────────────────────── */
 
 const DhruvaGlobe: React.FC<DhruvaGlobeProps> = ({ events, enabledLayers, onEventSelect }) => {
@@ -298,6 +366,24 @@ const DhruvaGlobe: React.FC<DhruvaGlobeProps> = ({ events, enabledLayers, onEven
         return result;
     }, [events, enabledLayers]);
 
+    const activeWarIsos = useMemo(() => {
+        const isos = new Map<string, number>();
+        for (const [type, layerEvents] of Object.entries(events)) {
+            if (type === 'war' && enabledLayers.has('war' as EventType)) {
+                for (const event of layerEvents) {
+                    if (event.metadata?.country_iso2) {
+                        try {
+                            isos.set(event.metadata.country_iso2, event.severity);
+                        } catch (e) {
+                            console.error(e)
+                        }
+                    }
+                }
+            }
+        }
+        return isos;
+    }, [events, enabledLayers]);
+
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
             <Viewer
@@ -316,6 +402,7 @@ const DhruvaGlobe: React.FC<DhruvaGlobeProps> = ({ events, enabledLayers, onEven
                 className="dhruva-globe"
             >
                 <DarkBasemap />
+                <WarBorders activeWarIsos={activeWarIsos} />
 
                 {flatEvents.map((event) => {
                     // For vehicles with headings, rotate icon to match compass direction.
@@ -348,6 +435,24 @@ const DhruvaGlobe: React.FC<DhruvaGlobeProps> = ({ events, enabledLayers, onEven
                                     image={getMarkerImage(event.type, event.severity)}
                                     verticalOrigin={VerticalOrigin.CENTER}
                                     scale={0.5}
+                                />
+                            </Entity>
+                        );
+                    }
+
+                    if (event.type === 'war') {
+                        return (
+                            <Entity
+                                key={event.id}
+                                position={Cartesian3.fromDegrees(event.longitude, event.latitude)}
+                                name={event.title}
+                                description={event.description}
+                                onClick={() => onEventSelect(event)}
+                            >
+                                <BillboardGraphics
+                                    image={getMarkerImage(event.type, event.severity)}
+                                    verticalOrigin={VerticalOrigin.CENTER}
+                                    scale={0.8}
                                 />
                             </Entity>
                         );

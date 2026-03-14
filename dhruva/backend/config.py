@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3.1:8b"
     threatfox_api_key: Optional[str] = None
     n2yo_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
 
     # OpenSky Network OAuth2 credentials
     opensky_client_id: str = ""
@@ -97,6 +98,12 @@ def _load_settings() -> Settings:
                 s.n2yo_api_key = creds.get("n2yo_api_key", "")
                 if s.n2yo_api_key:
                     _cfg_logger.info("N2YO credentials loaded from %s", creds_path.name)
+            
+            # Gemini API (Dhruva API)
+            if not s.gemini_api_key:
+                s.gemini_api_key = creds.get("Dhruva API", "")
+                if s.gemini_api_key:
+                    _cfg_logger.info("Gemini (Dhruva) credentials loaded from %s", creds_path.name)
         except Exception as e:
             _cfg_logger.warning("Failed to read credentials.json: %s", e)
 

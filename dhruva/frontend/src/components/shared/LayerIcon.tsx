@@ -133,6 +133,12 @@ const ICON_PATHS: Record<EventType, (c: string) => React.ReactNode> = {
             <path d="M8 2v12M2 8h12M4 4c2.5 1.5 5.5 1.5 8 0" fill="none" stroke={c} strokeWidth="1" opacity="0.6" />
         </>
     ),
+    war: (c) => (
+        <>
+            <path d="M8 1.5l5 2v4c0 4-5 6.5-5 6.5S3 11.5 3 7.5v-4z" fill="none" stroke={c} strokeWidth="1.5" />
+            <circle cx="8" cy="7" r="2" fill={c} opacity="0.8" />
+        </>
+    ),
 };
 
 interface LayerIconProps {

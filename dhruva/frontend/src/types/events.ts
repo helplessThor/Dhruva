@@ -27,7 +27,10 @@ export type EventType =
     | 'naval'
     | 'satellite'
     | 'notam'
-    | 'news';
+    | 'news'
+    | 'war'
+    | 'acled'
+    | 'acled_cast';
 
 export interface RiskLevel {
     level: number; // 1–5
@@ -78,4 +81,5 @@ export const LAYER_CONFIGS: LayerConfig[] = [
     { id: 'naval', label: 'Naval Deployments', icon: 'marine', color: '#3b82f6', enabled: true },
     { id: 'satellite', label: 'Live Satellites', icon: 'satellite', color: '#cbd5e1', enabled: false },
     { id: 'notam', label: 'Airspace Closures', icon: 'military_aircraft', color: '#ef4444', enabled: true },
+    { id: 'war', label: 'Ongoing Wars', icon: 'shield-alert', color: '#ff0033', enabled: true },
 ];

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShieldAlert, RefreshCw, Radio, Search, Loader2 } from 'lucide-react';
+import { ShieldAlert, RefreshCw } from 'lucide-react';
 
 interface CCTVFeed {
     country: string;
@@ -12,54 +12,13 @@ interface CCTVFeed {
     cii_score: number;
     cii_label: string;
     cii_color: string;
+    war_severity?: number;
 }
 
 export function CCTVGrid() {
     const [feeds, setFeeds] = useState<CCTVFeed[]>([]);
     const [loading, setLoading] = useState(true);
     const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-
-    // Search Override State
-    const [searchQuery, setSearchQuery] = useState("");
-    const [searchLoading, setSearchLoading] = useState(false);
-
-    const handleSearch = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!searchQuery.trim()) return;
-
-        setSearchLoading(true);
-        try {
-            const resp = await fetch(`http://localhost:8000/api/cctv/search?query=${encodeURIComponent(searchQuery)}`);
-            if (resp.ok) {
-                const data = await resp.json();
-                if (data.success) {
-                    setFeeds(prev => {
-                        const newFeeds = [...prev];
-                        if (newFeeds.length > 0) {
-                            newFeeds[0] = {
-                                ...newFeeds[0],
-                                country: data.country || "Custom",
-                                city: data.city || searchQuery,
-                                video_id: data.video_id,
-                                is_fallback: true,
-                                subtitle: "MANUAL OVERRIDE",
-                                cii_label: "OVERRIDE",
-                                cii_color: "#f59e0b" // Amber lock
-                            };
-                        }
-                        return newFeeds;
-                    });
-                    setSearchQuery("");
-                } else {
-                    alert("No live public webcam found for that location. Try another city.");
-                }
-            }
-        } catch (error) {
-            console.error("Search failed", error);
-        } finally {
-            setSearchLoading(false);
-        }
-    };
 
     const fetchFeeds = async () => {
         setLoading(true);
@@ -85,112 +44,66 @@ export function CCTVGrid() {
     }, []);
 
     return (
-        <div className="w-full bg-slate-900 border-t border-slate-700/50 p-6 flex flex-col gap-4 mt-8">
-            {/* Header and Controls */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-4">
-                <div>
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Radio className="w-5 h-5 text-red-500 animate-pulse" />
-                        Live Global Threat Monitoring
+        <div className="w-full bg-[#0a0a0a] border-t border-slate-800 p-2 flex flex-col gap-2 relative mt-4">
+
+            {/* Top Widget Header */}
+            <div className="flex items-center justify-between gap-3 mb-2 px-2 border-b border-slate-800 pb-2">
+                <div className="flex items-center gap-3">
+                    <h2 className="text-white font-mono font-bold tracking-widest flex items-center gap-2 uppercase text-lg">
+                        LIVE WARZONE CAM
                     </h2>
-                    <p className="text-slate-400 text-sm mt-1">
-                        Real-time optical feeds from the Top 4 most unstable regions, driven natively by the Country Instability Index (CII).
-                    </p>
-                </div>
-
-                <div className="flex flex-col md:flex-row items-center gap-3">
-                    {/* Search Form */}
-                    <form onSubmit={handleSearch} className="relative flex items-center">
-                        <input
-                            type="text"
-                            className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-l px-3 py-1.5 focus:outline-none focus:border-cyan-500 w-48 transition-colors"
-                            placeholder="Override city (e.g. Taipei)"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            disabled={searchLoading}
-                        />
-                        <button
-                            type="submit"
-                            disabled={searchLoading || !searchQuery.trim()}
-                            className="bg-slate-700 hover:bg-slate-600 border border-l-0 border-slate-700 rounded-r px-3 py-1.5 flex items-center justify-center transition-colors disabled:opacity-50"
-                        >
-                            {searchLoading ? <Loader2 className="w-4 h-4 text-cyan-400 justify-center animate-spin" /> : <Search className="w-4 h-4 text-slate-300" />}
-                        </button>
-                    </form>
-
-                    <div className="text-xs text-slate-500 flex items-center gap-1 font-mono bg-slate-800/50 rounded px-2 py-1.5 border border-slate-700">
-                        <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
-                        {lastUpdated.toLocaleTimeString()}
+                    <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)]"></span>
+                        <span className="text-red-500 font-mono font-bold">LIVE</span>
                     </div>
-                    <button
-                        onClick={fetchFeeds}
-                        disabled={loading}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-sm text-slate-300 transition-colors disabled:opacity-50"
-                    >
-                        Auto-Rotate
-                    </button>
+                </div>
+                
+                <div className="text-[10px] text-slate-500 flex items-center gap-1 font-mono uppercase">
+                    <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin text-red-500' : ''}`} />
+                    {lastUpdated.toLocaleTimeString()}
                 </div>
             </div>
 
-            {/* Grid Canvas */}
-            <div
-                className="gap-4 w-full mt-4"
-                style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}
-            >
+            {/* Grid Canvas - Single Large Feed */}
+            <div className="w-full mt-1">
                 {feeds.map((feed, idx) => (
                     <div
                         key={`${feed.iso2}-${idx}`}
-                        className="relative bg-black rounded-lg overflow-hidden border-2 shadow-lg flex flex-col"
-                        style={{
-                            borderColor: feed.cii_color,
-                            boxShadow: feed.cii_score > 50 ? `0 0 15px ${feed.cii_color}40` : 'none'
-                        }}
+                        className="relative bg-black border-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] flex flex-col group overflow-hidden rounded-sm w-full"
+                        style={{ height: '600px' }} // Make it massive
                     >
+                        {/* Status Dot Top Left */}
+                        <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-red-600 border-2 border-red-400 animate-pulse shadow-[0_0_12px_rgba(220,38,38,0.9)]"></div>
+                        </div>
+
                         {/* Overlay Header */}
-                        <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/90 to-transparent p-3 flex justify-between items-start pointer-events-none">
+                        <div className="absolute top-4 left-10 z-10 flex justify-between items-start pointer-events-none">
                             <div>
-                                <div className="flex items-center gap-2">
-                                    <img
-                                        src={`https://flagcdn.com/24x18/${feed.iso2.toLowerCase()}.png`}
-                                        alt={feed.country}
-                                        className="rounded-sm opacity-90"
-                                    />
-                                    <h3 className="text-white font-mono font-bold tracking-wider drop-shadow-md">
-                                        {feed.city.toUpperCase()}, {feed.country.toUpperCase()}
-                                    </h3>
-                                </div>
+                                <h3 className="text-white font-mono font-bold tracking-widest text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,1)] uppercase">
+                                    {feed.city}
+                                </h3>
                                 {feed.is_fallback && feed.subtitle && (
-                                    <p className="text-orange-400 text-xs mt-1 font-mono uppercase bg-black/50 px-1 rounded inline-block">
+                                    <p className="text-orange-400 text-[10px] mt-0.5 font-mono uppercase bg-black/60 px-1 inline-block">
                                         ⚠️ {feed.subtitle}
                                     </p>
                                 )}
                             </div>
-
-                            <div
-                                className="px-2 py-1 rounded text-xs font-bold font-mono border backdrop-blur-sm shadow-sm"
-                                style={{
-                                    backgroundColor: `${feed.cii_color}20`,
-                                    borderColor: feed.cii_color,
-                                    color: feed.cii_color
-                                }}
-                            >
-                                CII: {feed.cii_score.toFixed(1)} [{feed.cii_label}]
-                            </div>
                         </div>
 
-                        {/* Sub-Header for override (placeholder for now) */}
-                        <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/90 to-transparent p-3 pt-8 pb-2 pointer-events-none flex justify-between items-end">
-                            <div className="flex items-center gap-1.5 text-red-500 font-mono text-[10px] uppercase font-bold tracking-widest bg-black/50 px-1.5 py-0.5 rounded">
-                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                                LIVE REC.
+                        {/* CII Override specific overlay to show country status */}
+                        {feed.war_severity ? (
+                            <div className="absolute top-4 right-4 z-10 px-3 py-1 bg-black/80 border border-red-500 text-sm text-red-500 font-mono font-bold flex items-center gap-2 shadow-[0_0_15px_rgba(220,38,38,0.3)]">
+                                WAR SEVERITY: {feed.war_severity}/5
                             </div>
-                            <div className="text-slate-500 font-mono text-[10px] tracking-widest">
-                                CAM-{idx + 1}-SATCOM
+                        ) : (
+                            <div className="absolute top-4 right-4 z-10 px-3 py-1 bg-black/80 text-sm text-[#00ff88] font-mono border border-[#00ff88]/30">
+                                THREAT: {feed.cii_score.toFixed(0)}
                             </div>
-                        </div>
+                        )}
 
                         {/* Video Player */}
-                        <div className="relative w-full aspect-video bg-slate-900 flex items-center justify-center">
+                        <div className="relative w-full aspect-video bg-[#050505] flex items-center justify-center">
                             {feed.video_id ? (
                                 <iframe
                                     className="absolute inset-0 w-full h-full pointer-events-none" // pointer-events-none prevents scrolling issues
@@ -212,10 +125,10 @@ export function CCTVGrid() {
                 ))}
 
                 {loading && feeds.length === 0 && (
-                    // Skeletons
-                    [1, 2, 3, 4].map(i => (
-                        <div key={i} className="w-full aspect-video bg-slate-800 rounded-lg animate-pulse border border-slate-700"></div>
-                    ))
+                    <div className="w-full h-[600px] bg-slate-900 rounded-sm animate-pulse border border-slate-800 flex items-center justify-center flex-col text-slate-600 font-mono">
+                         <ShieldAlert className="w-12 h-12 mb-4 opacity-50 animate-pulse" />
+                         <p>ESTABLISHING SATCOM LINK...</p>
+                    </div>
                 )}
             </div>
         </div>

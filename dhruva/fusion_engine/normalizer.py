@@ -29,7 +29,10 @@ def normalize_batch(raw_events: list[dict]) -> list[dict]:
             results.append(event.model_dump(mode="json"))
         except Exception as e:
             import logging
+            import traceback
             logging.getLogger("dhruva.normalizer").error(f"Failed to normalize event: {e}, raw: {raw.get('title')}")
+            logging.getLogger("dhruva.normalizer").error(f"Raw data: {raw}")
+            traceback.print_exc()
             continue
             
     return results

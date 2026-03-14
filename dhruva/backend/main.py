@@ -25,6 +25,7 @@ from fusion_engine.risk_calculator import calculate_risk
 from fusion_engine.country_instability import compute_cii
 from backend.cctv_manager import get_top_cctv_feeds
 from backend.market_data import market_data_loop, get_market_data
+from backend.pizza_collector import pizza_data_loop, get_pizza_data
 
 from collectors.earthquake_collector import EarthquakeCollector
 from collectors.fire_collector import FireCollector
@@ -40,6 +41,7 @@ from collectors.naval_collector import NavalCollector
 from collectors.satellite_collector import SatelliteCollector
 from collectors.notam_collector import NotamCollector
 from collectors.news_collector import NewsCollector
+from collectors.war_collector import WarCollector
 
 # ─── Logging ───────────────────────────────────────
 logging.basicConfig(
@@ -76,6 +78,7 @@ event_store: dict[str, list[dict]] = {
     "satellite": [],
     "notam": [],
     "news": [],
+    "war": [],
 }
 current_risk: dict = {"level": 1, "label": "NOMINAL", "color": "#00ff88"}
 
@@ -101,11 +104,12 @@ collectors = [
     SatelliteCollector(interval=settings.satellite_interval),
     NotamCollector(interval=settings.notam_interval),
     NewsCollector(interval=300),
+    WarCollector(interval=14400), # 4 hours
 ]
 
 # Layer types that trigger hotspot / convergence recompute
 HOTSPOT_TRIGGER_LAYERS = {
-    "military", "ucdp",
+    "military", "ucdp", "war",
     "earthquake", "fire", "protest",
     "military_marine", "cyber", "outage",
 }
@@ -314,6 +318,11 @@ async def lifespan(app: FastAPI):
     tasks.append(market_task)
     logger.info("Started market data fetcher")
 
+    # Start Pizza Index fetcher (every 30 minutes)
+    pizza_task = asyncio.create_task(pizza_data_loop(interval=1800))
+    tasks.append(pizza_task)
+    logger.info("Started Pentagon Pizza index fetcher")
+
     yield
 
     # Shutdown
@@ -466,6 +475,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 # ─── Run ───────────────────────────────────────────
+@app.get("/api/pizza")
+async def get_pizza():
+    """Get Pentagon Pizza Index."""
+    return get_pizza_data()
+
 @app.get("/api/cctv")
 async def get_cctv_feeds():
     """Return the top 4 live CCTV feeds based on highest current CII."""

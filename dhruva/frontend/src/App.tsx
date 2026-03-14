@@ -3,6 +3,7 @@ import DhruvaGlobe from './components/Globe/DhruvaGlobe';
 import EventSidebar from './components/Sidebar/EventSidebar';
 import LayerToggles from './components/Controls/LayerToggles';
 import DefconIndicator from './components/RiskIndicator/DefconIndicator';
+import PizzaMeterIndicator from './components/RiskIndicator/PizzaMeterIndicator';
 import AirTrafficView from './components/Views/AirTrafficView';
 import MarineTrafficView from './components/Views/MarineTrafficView';
 import CyberAttackView from './components/Views/CyberAttackView';
@@ -88,13 +89,14 @@ function App() {
           />
         </main>
 
-        {/* Right Panel — Risk Indicator */}
-        <aside className="right-panel">
+        {/* Right Panel — Risk Indicators */}
+        <aside className="right-panel flex flex-col gap-4">
           <DefconIndicator
             risk={risk}
             totalEvents={totalEvents}
             connected={connected}
           />
+          <PizzaMeterIndicator />
         </aside>
       </div>
 
